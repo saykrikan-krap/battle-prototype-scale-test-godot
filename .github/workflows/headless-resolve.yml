@@ -1,0 +1,28 @@
+name: Headless Resolve
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  headless-resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Godot
+        run: |
+          set -euo pipefail
+          GODOT_VERSION="4.5.1"
+          GODOT_ZIP="Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          GODOT_URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/${GODOT_ZIP}"
+          mkdir -p tools/godot/${GODOT_VERSION}/linux
+          curl -L -o /tmp/godot.zip "$GODOT_URL"
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          mv /tmp/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 tools/godot/${GODOT_VERSION}/linux/
+          chmod +x tools/godot/${GODOT_VERSION}/linux/Godot_v${GODOT_VERSION}-stable_linux.x86_64
+      - name: Run headless resolve
+        run: |
+          chmod +x ./run.sh
+          ./run.sh --headless --resolve-only
