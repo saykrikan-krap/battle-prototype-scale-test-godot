@@ -8,6 +8,8 @@ const BattleResult = preload("res://schema/battle_result.gd")
 
 const INF_DISTANCE = 1_000_000
 const STALL_TICK_LIMIT = 0
+const SOFT_COST_EMPTY = 1
+const SOFT_COST_FRIENDLY_PER_UNIT = 1
 
 static func resolve(input) -> Dictionary:
 	var start_ms = Time.get_ticks_msec()
@@ -597,24 +599,80 @@ static func _compute_distance_field(
 	for i in range(tile_count):
 		dist[i] = INF_DISTANCE
 
-	var queue = PackedInt32Array()
-	var head = 0
+	var heap_nodes = PackedInt32Array()
+	var heap_dists = PackedInt32Array()
 	for tile in range(tile_count):
 		if tile_side[tile] != -1 and tile_side[tile] != unit_side:
 			dist[tile] = 0
-			queue.append(tile)
+			_heap_push(heap_nodes, heap_dists, tile, 0)
 
-	while head < queue.size():
-		var tile = queue[head]
-		head += 1
-		var next_dist = dist[tile] + 1
+	while heap_nodes.size() > 0:
+		var current = _heap_pop(heap_nodes, heap_dists)
+		var tile = current.x
+		var base_dist = current.y
+		if base_dist != dist[tile]:
+			continue
 		for neighbor in neighbors[tile]:
-			if dist[neighbor] <= next_dist:
+			var side_value = tile_side[neighbor]
+			if side_value != -1 and side_value != unit_side:
 				continue
-			if _tile_can_accept(neighbor, unit_side, unit_size, tile_side, tile_unit_count, tile_total_size, max_units, max_total_size):
+			var step_cost = SOFT_COST_EMPTY
+			if side_value == unit_side:
+				step_cost = SOFT_COST_EMPTY + (tile_unit_count[neighbor] * SOFT_COST_FRIENDLY_PER_UNIT)
+			var next_dist = base_dist + step_cost
+			if next_dist < dist[neighbor]:
 				dist[neighbor] = next_dist
-				queue.append(neighbor)
+				_heap_push(heap_nodes, heap_dists, neighbor, next_dist)
 	return dist
+
+static func _heap_push(nodes: PackedInt32Array, dists: PackedInt32Array, node: int, dist: int) -> void:
+	nodes.append(node)
+	dists.append(dist)
+	var index = nodes.size() - 1
+	while index > 0:
+		var parent = (index - 1) / 2
+		if dists[parent] <= dist:
+			break
+		nodes[index] = nodes[parent]
+		dists[index] = dists[parent]
+		nodes[parent] = node
+		dists[parent] = dist
+		index = parent
+
+static func _heap_pop(nodes: PackedInt32Array, dists: PackedInt32Array) -> Vector2i:
+	var node = nodes[0]
+	var dist = dists[0]
+	var last_index = nodes.size() - 1
+	if last_index == 0:
+		nodes.resize(0)
+		dists.resize(0)
+		return Vector2i(node, dist)
+	nodes[0] = nodes[last_index]
+	dists[0] = dists[last_index]
+	nodes.resize(last_index)
+	dists.resize(last_index)
+	_heap_sift_down(nodes, dists, 0)
+	return Vector2i(node, dist)
+
+static func _heap_sift_down(nodes: PackedInt32Array, dists: PackedInt32Array, index: int) -> void:
+	var size = nodes.size()
+	while index < size:
+		var left = (index * 2) + 1
+		if left >= size:
+			break
+		var right = left + 1
+		var smallest = left
+		if right < size and dists[right] < dists[left]:
+			smallest = right
+		if dists[index] <= dists[smallest]:
+			break
+		var tmp_node = nodes[index]
+		var tmp_dist = dists[index]
+		nodes[index] = nodes[smallest]
+		dists[index] = dists[smallest]
+		nodes[smallest] = tmp_node
+		dists[smallest] = tmp_dist
+		index = smallest
 
 static func _choose_move_tile(
 		current_tile: int,
