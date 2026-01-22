@@ -18,6 +18,7 @@ var _resolving: bool = false
 var _last_result
 var _last_event_log
 var _current_tps: int = DEFAULT_TPS
+var _allow_play_toggle: bool = false
 
 func _ready() -> void:
 	var args = OS.get_cmdline_args()
@@ -39,6 +40,7 @@ func _ready() -> void:
 	_show_preview(input)
 	_battle_ui.set_start_overlay_visible(true)
 	_battle_ui.set_resolving(false)
+	_allow_play_toggle = false
 
 func _process(delta: float) -> void:
 	if _resolving and _resolver_thread != null and not _resolver_thread.is_alive():
@@ -82,6 +84,12 @@ func _on_resolve_complete(result: Dictionary) -> void:
 	_replayer.set_playing(true)
 	_battle_ui.set_playing(true)
 	_battle_ui.set_start_overlay_visible(false)
+	_allow_play_toggle = true
+
+func _input(event) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_SPACE and _allow_play_toggle:
+			_on_play_toggled(not _replayer.playing)
 
 func _on_play_toggled(playing: bool) -> void:
 	if _replayer == null:
