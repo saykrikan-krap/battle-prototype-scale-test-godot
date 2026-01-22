@@ -5,6 +5,7 @@ signal resolve_requested
 signal play_toggled(playing: bool)
 signal step_requested
 signal speed_changed(ticks_per_second: int)
+signal unit_details_closed
 
 var _resolve_button: Button
 var _play_button: Button
@@ -20,6 +21,24 @@ var _hover_panel: PanelContainer
 var _hover_title: Label
 var _hover_entries = []
 var _unit_textures = []
+var _details_backdrop: ColorRect
+var _details_panel: PanelContainer
+var _details_title: Label
+var _details_icon: TextureRect
+var _details_name: Label
+var _details_unit_strip: HBoxContainer
+var _details_unit_slots = []
+var _details_stats: GridContainer
+var _details_stat_values = []
+var _details_prev: Button
+var _details_next: Button
+var _details_count: Label
+var _details_close: Button
+var _details_units: Array = []
+var _details_tile: Vector2i = Vector2i(-1, -1)
+var _details_index: int = 0
+var _details_unit_normal_style: StyleBoxFlat
+var _details_unit_selected_style: StyleBoxFlat
 
 var _playing: bool = true
 var _resolving: bool = false
@@ -46,6 +65,15 @@ const UNIT_NAMES = [
 	"Cavalry",
 	"Heavy Cavalry",
 	"Mage",
+]
+
+const DETAIL_STATS = [
+	"Unit ID",
+	"Side",
+	"Size",
+	"Move Cost",
+	"Action Speed",
+	"Range",
 ]
 
 func _ready() -> void:
@@ -130,6 +158,7 @@ func _ready() -> void:
 
 	set_start_overlay_visible(true)
 	_build_hover_panel()
+	_build_unit_details_modal()
 
 func set_resolving(resolving: bool) -> void:
 	_resolving = resolving
@@ -167,6 +196,25 @@ func set_hovered_units(tile: Vector2i, unit_types: Array) -> void:
 		return
 	_hover_title.text = "Tile %d,%d" % [tile.x, tile.y]
 	_set_hover_entries(unit_types)
+
+func show_unit_details(tile: Vector2i, units: Array) -> void:
+	_ensure_unit_textures()
+	if units.is_empty():
+		return
+	_details_tile = tile
+	_details_units = units.duplicate()
+	_details_index = 0
+	_details_backdrop.visible = true
+	_update_unit_details()
+
+func hide_unit_details() -> void:
+	if _details_backdrop == null or not _details_backdrop.visible:
+		return
+	_details_backdrop.visible = false
+	emit_signal("unit_details_closed")
+
+func is_unit_details_visible() -> bool:
+	return _details_backdrop != null and _details_backdrop.visible
 
 func _on_resolve_pressed() -> void:
 	emit_signal("resolve_requested")
@@ -240,6 +288,158 @@ func _build_hover_panel() -> void:
 			"label": label,
 		})
 
+func _build_unit_details_modal() -> void:
+	_details_backdrop = ColorRect.new()
+	_details_backdrop.anchor_left = 0.0
+	_details_backdrop.anchor_top = 0.0
+	_details_backdrop.anchor_right = 1.0
+	_details_backdrop.anchor_bottom = 1.0
+	_details_backdrop.offset_left = 0
+	_details_backdrop.offset_top = 0
+	_details_backdrop.offset_right = 0
+	_details_backdrop.offset_bottom = 0
+	_details_backdrop.color = Color(0, 0, 0, 0.45)
+	_details_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_details_backdrop.visible = false
+	add_child(_details_backdrop)
+
+	_details_panel = PanelContainer.new()
+	_details_panel.anchor_left = 0.5
+	_details_panel.anchor_top = 0.5
+	_details_panel.anchor_right = 0.5
+	_details_panel.anchor_bottom = 0.5
+	_details_panel.offset_left = -220
+	_details_panel.offset_top = -170
+	_details_panel.offset_right = 220
+	_details_panel.offset_bottom = 170
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.1, 0.12, 0.16, 1.0)
+	panel_style.border_width_left = 2
+	panel_style.border_width_top = 2
+	panel_style.border_width_right = 2
+	panel_style.border_width_bottom = 2
+	panel_style.border_color = Color(0.9, 0.9, 0.95, 0.35)
+	_details_panel.add_theme_stylebox_override("panel", panel_style)
+	_details_backdrop.add_child(_details_panel)
+
+	var panel_vbox = VBoxContainer.new()
+	panel_vbox.add_theme_constant_override("separation", 12)
+	_details_panel.add_child(panel_vbox)
+
+	var header = HBoxContainer.new()
+	header.add_theme_constant_override("separation", 8)
+	panel_vbox.add_child(header)
+
+	_details_title = Label.new()
+	_details_title.text = "Tile"
+	_details_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(_details_title)
+
+	_details_close = Button.new()
+	_details_close.text = "Close"
+	_details_close.pressed.connect(_on_details_close)
+	header.add_child(_details_close)
+
+	var content = HBoxContainer.new()
+	content.add_theme_constant_override("separation", 16)
+	panel_vbox.add_child(content)
+
+	_details_icon = TextureRect.new()
+	_details_icon.custom_minimum_size = Vector2(72, 72)
+	_details_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_details_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	content.add_child(_details_icon)
+
+	var details_vbox = VBoxContainer.new()
+	details_vbox.add_theme_constant_override("separation", 6)
+	details_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_child(details_vbox)
+
+	_details_name = Label.new()
+	_details_name.text = ""
+	details_vbox.add_child(_details_name)
+
+	_details_unit_normal_style = StyleBoxFlat.new()
+	_details_unit_normal_style.bg_color = Color(0, 0, 0, 0)
+	_details_unit_normal_style.border_width_left = 1
+	_details_unit_normal_style.border_width_top = 1
+	_details_unit_normal_style.border_width_right = 1
+	_details_unit_normal_style.border_width_bottom = 1
+	_details_unit_normal_style.border_color = Color(1, 1, 1, 0.2)
+
+	_details_unit_selected_style = StyleBoxFlat.new()
+	_details_unit_selected_style.bg_color = Color(1, 1, 1, 0.08)
+	_details_unit_selected_style.border_width_left = 2
+	_details_unit_selected_style.border_width_top = 2
+	_details_unit_selected_style.border_width_right = 2
+	_details_unit_selected_style.border_width_bottom = 2
+	_details_unit_selected_style.border_color = Color(1, 1, 1, 0.9)
+
+	_details_unit_strip = HBoxContainer.new()
+	_details_unit_strip.add_theme_constant_override("separation", 6)
+	details_vbox.add_child(_details_unit_strip)
+
+	for i in range(4):
+		var slot = PanelContainer.new()
+		slot.custom_minimum_size = Vector2(38, 38)
+		slot.add_theme_stylebox_override("panel", _details_unit_normal_style)
+		_details_unit_strip.add_child(slot)
+
+		var margin = MarginContainer.new()
+		margin.add_theme_constant_override("margin_left", 4)
+		margin.add_theme_constant_override("margin_top", 4)
+		margin.add_theme_constant_override("margin_right", 4)
+		margin.add_theme_constant_override("margin_bottom", 4)
+		slot.add_child(margin)
+
+		var icon = TextureRect.new()
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		icon.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		margin.add_child(icon)
+
+		_details_unit_slots.append({
+			"slot": slot,
+			"icon": icon,
+		})
+
+	_details_stats = GridContainer.new()
+	_details_stats.columns = 2
+	_details_stats.add_theme_constant_override("h_separation", 12)
+	_details_stats.add_theme_constant_override("v_separation", 6)
+	details_vbox.add_child(_details_stats)
+
+	for label_text in DETAIL_STATS:
+		var key_label = Label.new()
+		key_label.text = "%s:" % label_text
+		_details_stats.add_child(key_label)
+
+		var value_label = Label.new()
+		value_label.text = ""
+		_details_stats.add_child(value_label)
+		_details_stat_values.append(value_label)
+
+	var footer = HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 10)
+	panel_vbox.add_child(footer)
+
+	_details_prev = Button.new()
+	_details_prev.text = "Prev"
+	_details_prev.pressed.connect(_on_details_prev)
+	footer.add_child(_details_prev)
+
+	_details_count = Label.new()
+	_details_count.text = "0 units"
+	_details_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_details_count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer.add_child(_details_count)
+
+	_details_next = Button.new()
+	_details_next.text = "Next"
+	_details_next.pressed.connect(_on_details_next)
+	footer.add_child(_details_next)
+
 func _ensure_unit_textures() -> void:
 	if _unit_textures.size() > 0:
 		return
@@ -267,3 +467,84 @@ func _set_hover_entries(unit_types: Array) -> void:
 			entry["label"].text = UNIT_NAMES[unit_type]
 		else:
 			row.visible = false
+
+func _update_unit_details() -> void:
+	if _details_backdrop == null:
+		return
+	if _details_tile.x >= 0:
+		_details_title.text = "Tile %d,%d" % [_details_tile.x, _details_tile.y]
+	else:
+		_details_title.text = "Tile"
+
+	if _details_units.is_empty():
+		_details_name.text = "No units on this tile."
+		_details_icon.visible = false
+		_details_unit_strip.visible = false
+		_details_stats.visible = false
+		_details_count.text = "0 units"
+		_details_prev.disabled = true
+		_details_next.disabled = true
+		return
+
+	_details_icon.visible = true
+	_details_unit_strip.visible = true
+	_details_stats.visible = true
+
+	if _details_index < 0:
+		_details_index = 0
+	if _details_index >= _details_units.size():
+		_details_index = _details_units.size() - 1
+
+	var unit = _details_units[_details_index]
+	var unit_type = int(unit.get("unit_type", 0))
+	_details_icon.texture = _unit_textures[unit_type]
+	_details_name.text = UNIT_NAMES[unit_type]
+
+	for i in range(_details_unit_slots.size()):
+		var entry = _details_unit_slots[i]
+		if i < _details_units.size():
+			var slot_unit = _details_units[i]
+			var slot_type = int(slot_unit.get("unit_type", 0))
+			entry["slot"].visible = true
+			entry["icon"].texture = _unit_textures[slot_type]
+			var style = _details_unit_selected_style if i == _details_index else _details_unit_normal_style
+			entry["slot"].add_theme_stylebox_override("panel", style)
+		else:
+			entry["slot"].visible = false
+
+	var side_value = int(unit.get("side", 0))
+	var side_label = "Red" if side_value == 0 else "Blue"
+	var range_value = int(unit.get("range", 0))
+	var range_label = "Melee" if range_value <= 0 else str(range_value)
+
+	var values = [
+		str(unit.get("unit_id", 0)),
+		side_label,
+		str(unit.get("size", 0)),
+		str(unit.get("move_cost", 0)),
+		str(unit.get("attack_cost", 0)),
+		range_label,
+	]
+
+	for i in range(_details_stat_values.size()):
+		_details_stat_values[i].text = values[i]
+
+	_details_count.text = "Unit %d of %d" % [_details_index + 1, _details_units.size()]
+	var disable_nav = _details_units.size() <= 1
+	_details_prev.disabled = disable_nav
+	_details_next.disabled = disable_nav
+
+func _on_details_prev() -> void:
+	if _details_units.is_empty():
+		return
+	_details_index = (_details_index - 1 + _details_units.size()) % _details_units.size()
+	_update_unit_details()
+
+func _on_details_next() -> void:
+	if _details_units.is_empty():
+		return
+	_details_index = (_details_index + 1) % _details_units.size()
+	_update_unit_details()
+
+func _on_details_close() -> void:
+	hide_unit_details()
