@@ -312,6 +312,14 @@ func _build_unit_details_modal() -> void:
 	_details_panel.offset_top = -170
 	_details_panel.offset_right = 220
 	_details_panel.offset_bottom = 170
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.1, 0.12, 0.16, 1.0)
+	panel_style.border_width_left = 2
+	panel_style.border_width_top = 2
+	panel_style.border_width_right = 2
+	panel_style.border_width_bottom = 2
+	panel_style.border_color = Color(0.9, 0.9, 0.95, 0.35)
+	_details_panel.add_theme_stylebox_override("panel", panel_style)
 	_details_backdrop.add_child(_details_panel)
 
 	var panel_vbox = VBoxContainer.new()
