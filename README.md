@@ -14,3 +14,7 @@ From the project root:
 
 - macOS/Linux (bash/zsh): `./run.sh`
 - Windows (PowerShell): `.\run.ps1`
+
+Headless resolve (no rendering):
+- `./run.sh --headless --resolve-only`
+- `.\run.ps1 --resolve-only`
