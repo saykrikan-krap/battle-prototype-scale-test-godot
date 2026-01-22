@@ -42,7 +42,7 @@ static var MOVE_COST = PackedInt32Array([6, 7, 6, 6, 4, 5, 6])
 static var ATTACK_COST = PackedInt32Array([12, 13, 11, 14, 12, 13, 16])
 static var WAIT_COST = PackedInt32Array([1, 1, 1, 1, 1, 1, 1])
 static var MELEE_HIT_CHANCE = PackedInt32Array([50, 55, 60, 0, 50, 55, 0])
-static var RANGED_RANGE = PackedInt32Array([0, 0, 0, 5, 0, 0, 20])
+static var RANGED_RANGE = PackedInt32Array([0, 0, 0, 10, 0, 0, 20])
 static var PROJECTILE_SPEED = PackedInt32Array([2, 3])
 static var DEFAULT_FACING = PackedInt32Array([Facing.RIGHT, Facing.LEFT])
 
