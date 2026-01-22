@@ -34,10 +34,17 @@ const UNIT_FALLBACK_COLORS = [
 	Color(0.9, 0.45, 0.15),
 ]
 
-const SLOT_OFFSETS = [
-	Vector2(-0.25, -0.25),
+const SLOT_OFFSETS_RIGHT = [
 	Vector2(0.25, -0.25),
+	Vector2(0.25, 0.25),
+	Vector2(-0.25, -0.25),
 	Vector2(-0.25, 0.25),
+]
+
+const SLOT_OFFSETS_LEFT = [
+	Vector2(-0.25, -0.25),
+	Vector2(-0.25, 0.25),
+	Vector2(0.25, -0.25),
 	Vector2(0.25, 0.25),
 ]
 
@@ -217,7 +224,12 @@ func _update_unit_meshes(replayer) -> void:
 		var tile = ux + uy * grid_width
 		var slot = tile_slots[tile]
 		tile_slots[tile] = slot + 1
-		var offset = _slot_offset(slot)
+		var facing = BattleConstants.DEFAULT_FACING[replayer.unit_side[id]]
+		if replayer.tile_facing.size() == grid_width * grid_height:
+			var tile_facing = replayer.tile_facing[tile]
+			if tile_facing != -1:
+				facing = tile_facing
+		var offset = _slot_offset(slot, facing)
 
 		var to_pos = _tile_center(ux, uy) + offset
 		var draw_pos = to_pos
@@ -307,10 +319,11 @@ func _update_tile_overlay(replayer) -> void:
 func _tile_center(x: int, y: int) -> Vector2:
 	return Vector2((float(x) + 0.5) * TILE_SIZE, (float(y) + 0.5) * TILE_SIZE)
 
-func _slot_offset(slot: int) -> Vector2:
+func _slot_offset(slot: int, facing: int) -> Vector2:
 	var clamped = slot
 	if clamped < 0:
 		clamped = 0
-	if clamped >= SLOT_OFFSETS.size():
-		clamped = SLOT_OFFSETS.size() - 1
-	return SLOT_OFFSETS[clamped] * TILE_SIZE
+	var offsets = SLOT_OFFSETS_LEFT if facing == BattleConstants.Facing.LEFT else SLOT_OFFSETS_RIGHT
+	if clamped >= offsets.size():
+		clamped = offsets.size() - 1
+	return offsets[clamped] * TILE_SIZE

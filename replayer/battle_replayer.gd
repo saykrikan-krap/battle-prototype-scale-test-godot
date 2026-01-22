@@ -23,6 +23,8 @@ var prev_x = PackedInt32Array()
 var prev_y = PackedInt32Array()
 var last_move_tick = PackedInt32Array()
 var units_remaining = PackedInt32Array([0, 0])
+var tile_unit_count = PackedInt32Array()
+var tile_facing = PackedInt32Array()
 
 var projectile_ids = []
 var projectile_type = []
@@ -90,6 +92,13 @@ func _reset_state() -> void:
 		prev_x[i] = 0
 		prev_y[i] = 0
 		last_move_tick[i] = -1
+
+	var tile_count = grid_width * grid_height
+	tile_unit_count.resize(tile_count)
+	tile_facing.resize(tile_count)
+	for i in range(tile_count):
+		tile_unit_count[i] = 0
+		tile_facing[i] = -1
 
 	projectile_ids.clear()
 	projectile_type.clear()
@@ -165,15 +174,40 @@ func _apply_event(index: int) -> void:
 			prev_y[unit_id] = y
 			last_move_tick[unit_id] = -1
 			units_remaining[side] += 1
+			var tile_index = x + y * grid_width
+			if tile_index >= 0 and tile_index < tile_unit_count.size():
+				tile_unit_count[tile_index] += 1
+				if tile_facing[tile_index] == -1:
+					tile_facing[tile_index] = BattleConstants.DEFAULT_FACING[side]
 		BattleConstants.EventType.UNIT_MOVED:
 			var move_id = event_log.a[index]
 			var from_pos = event_log.b[index]
 			var to_pos = event_log.c[index]
-			prev_x[move_id] = BattleConstants.decode_x(from_pos)
-			prev_y[move_id] = BattleConstants.decode_y(from_pos)
-			unit_x[move_id] = BattleConstants.decode_x(to_pos)
-			unit_y[move_id] = BattleConstants.decode_y(to_pos)
+			var from_x = BattleConstants.decode_x(from_pos)
+			var from_y = BattleConstants.decode_y(from_pos)
+			var to_x = BattleConstants.decode_x(to_pos)
+			var to_y = BattleConstants.decode_y(to_pos)
+			prev_x[move_id] = from_x
+			prev_y[move_id] = from_y
+			unit_x[move_id] = to_x
+			unit_y[move_id] = to_y
 			last_move_tick[move_id] = event_log.ticks[index]
+			var from_tile = from_x + from_y * grid_width
+			var to_tile = to_x + to_y * grid_width
+			var was_empty = false
+			if to_tile >= 0 and to_tile < tile_unit_count.size():
+				was_empty = tile_unit_count[to_tile] == 0
+			if from_tile >= 0 and from_tile < tile_unit_count.size():
+				tile_unit_count[from_tile] -= 1
+				if tile_unit_count[from_tile] <= 0:
+					tile_unit_count[from_tile] = 0
+					tile_facing[from_tile] = -1
+			if to_tile >= 0 and to_tile < tile_unit_count.size():
+				if was_empty and tile_facing[to_tile] == -1:
+					tile_facing[to_tile] = BattleConstants.DEFAULT_FACING[unit_side[move_id]]
+				if to_x != from_x:
+					tile_facing[to_tile] = BattleConstants.Facing.RIGHT if to_x > from_x else BattleConstants.Facing.LEFT
+				tile_unit_count[to_tile] += 1
 		BattleConstants.EventType.PROJECTILE_FIRED:
 			var pid = event_log.a[index]
 			var p_type = event_log.b[index]
@@ -190,6 +224,12 @@ func _apply_event(index: int) -> void:
 			if unit_alive[removed_id] == 1:
 				unit_alive[removed_id] = 0
 				units_remaining[unit_side[removed_id]] -= 1
+				var removed_tile = unit_x[removed_id] + unit_y[removed_id] * grid_width
+				if removed_tile >= 0 and removed_tile < tile_unit_count.size():
+					tile_unit_count[removed_tile] -= 1
+					if tile_unit_count[removed_tile] <= 0:
+						tile_unit_count[removed_tile] = 0
+						tile_facing[removed_tile] = -1
 		BattleConstants.EventType.BATTLE_ENDED:
 			end_tick = event_log.b[index]
 		_:
