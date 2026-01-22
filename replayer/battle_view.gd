@@ -4,8 +4,29 @@ extends Node2D
 const BattleConstants = preload("res://schema/constants.gd")
 
 const TILE_SIZE = 24.0
+const VIEW_SCALE = 2.0
 const UNIT_SCALE = 0.42
 const PROJECTILE_SCALE = 0.2
+
+const UNIT_TEXTURE_PATHS = [
+	"res://assets/sprites/units/infantry.png",
+	"res://assets/sprites/units/heavy_infantry.png",
+	"res://assets/sprites/units/elite_infantry.png",
+	"res://assets/sprites/units/archer.png",
+	"res://assets/sprites/units/cavalry.png",
+	"res://assets/sprites/units/heavy_cavalry.png",
+	"res://assets/sprites/units/mage.png",
+]
+
+const UNIT_FALLBACK_COLORS = [
+	Color(0.78, 0.78, 0.82),
+	Color(0.46, 0.48, 0.52),
+	Color(0.9, 0.78, 0.26),
+	Color(0.24, 0.7, 0.3),
+	Color(0.25, 0.46, 0.9),
+	Color(0.12, 0.25, 0.62),
+	Color(0.9, 0.45, 0.15),
+]
 
 const SLOT_OFFSETS = [
 	Vector2(-0.25, -0.25),
@@ -17,9 +38,13 @@ const SLOT_OFFSETS = [
 var grid_width: int = 0
 var grid_height: int = 0
 
-var _texture: Texture2D
+var _unit_textures = []
+var _projectile_texture: Texture2D
 var _unit_meshes = []
 var _projectile_meshes = []
+
+func _ready() -> void:
+	scale = Vector2(VIEW_SCALE, VIEW_SCALE)
 
 func setup(width: int, height: int) -> void:
 	if width == grid_width and height == grid_height and _unit_meshes.size() > 0:
@@ -55,35 +80,42 @@ func render(replayer) -> void:
 	_update_projectile_meshes(replayer)
 
 func _ensure_meshes() -> void:
-	if _texture == null:
-		var image = Image.create(1, 1, false, Image.FORMAT_RGBA8)
-		image.fill(Color.WHITE)
-		_texture = ImageTexture.create_from_image(image)
+	if _unit_textures.size() == 0:
+		_unit_textures.resize(UNIT_TEXTURE_PATHS.size())
+		for i in range(UNIT_TEXTURE_PATHS.size()):
+			_unit_textures[i] = _load_texture(UNIT_TEXTURE_PATHS[i], UNIT_FALLBACK_COLORS[i])
+
+	if _projectile_texture == null:
+		_projectile_texture = _make_color_texture(Color.WHITE)
 
 	if _unit_meshes.size() == 0:
-		var colors = [
-			Color(0.8, 0.8, 0.8),
-			Color(0.5, 0.5, 0.5),
-			Color(0.9, 0.8, 0.3),
-			Color(0.2, 0.7, 0.2),
-			Color(0.2, 0.4, 0.9),
-			Color(0.1, 0.2, 0.6),
-			Color(0.9, 0.4, 0.1),
-		]
-		for color in colors:
-			var instance = _make_multimesh_instance(color)
+		for texture in _unit_textures:
+			var instance = _make_multimesh_instance(texture, Color.WHITE)
 			_unit_meshes.append(instance)
 			add_child(instance)
 
 	if _projectile_meshes.size() == 0:
-		var arrow = _make_multimesh_instance(Color(0.95, 0.9, 0.7))
-		var fireball = _make_multimesh_instance(Color(0.95, 0.3, 0.1))
+		var arrow = _make_multimesh_instance(_projectile_texture, Color(0.95, 0.9, 0.7))
+		var fireball = _make_multimesh_instance(_projectile_texture, Color(0.95, 0.3, 0.1))
 		_projectile_meshes.append(arrow)
 		_projectile_meshes.append(fireball)
 		add_child(arrow)
 		add_child(fireball)
 
-func _make_multimesh_instance(color: Color) -> MultiMeshInstance2D:
+func _load_texture(path: String, fallback_color: Color) -> Texture2D:
+	var image = Image.new()
+	var err = image.load(path)
+	if err != OK:
+		push_warning("Failed to load sprite %s (error %d)" % [path, err])
+		return _make_color_texture(fallback_color)
+	return ImageTexture.create_from_image(image)
+
+func _make_color_texture(color: Color) -> Texture2D:
+	var image = Image.create(1, 1, false, Image.FORMAT_RGBA8)
+	image.fill(color)
+	return ImageTexture.create_from_image(image)
+
+func _make_multimesh_instance(texture: Texture2D, color: Color) -> MultiMeshInstance2D:
 	var multimesh = MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_2D
 	var quad = QuadMesh.new()
@@ -93,7 +125,7 @@ func _make_multimesh_instance(color: Color) -> MultiMeshInstance2D:
 
 	var instance = MultiMeshInstance2D.new()
 	instance.multimesh = multimesh
-	instance.texture = _texture
+	instance.texture = texture
 	instance.modulate = color
 	return instance
 
