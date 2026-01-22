@@ -205,6 +205,7 @@ func _make_color_texture(color: Color) -> Texture2D:
 func _make_multimesh_instance(texture: Texture2D, color: Color) -> MultiMeshInstance2D:
 	var multimesh = MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_2D
+	multimesh.use_colors = true
 	var quad = QuadMesh.new()
 	quad.size = Vector2(1.0, 1.0)
 	multimesh.mesh = quad
@@ -268,11 +269,17 @@ func _update_unit_meshes(replayer) -> void:
 		var t = replayer.unit_type[id]
 		var idx = type_offsets[t]
 		type_offsets[t] = idx + 1
+		var color = Color(1, 1, 1, 1)
+		if replayer.last_attack_tick.size() == unit_count:
+			var last_attack = replayer.last_attack_tick[id]
+			if last_attack >= 0 and last_attack == replayer.current_tick:
+				color = Color(1.0, 0.35, 0.2, 1.0)
 
 		var transform = Transform2D.IDENTITY
 		transform = transform.scaled(Vector2(unit_pixel_size, unit_pixel_size))
 		transform.origin = draw_pos - half_unit
 		_unit_meshes[t].multimesh.set_instance_transform_2d(idx, transform)
+		_unit_meshes[t].multimesh.set_instance_color(idx, color)
 
 func _update_projectile_meshes(replayer) -> void:
 	var count = replayer.projectile_ids.size()
@@ -325,9 +332,11 @@ func _update_projectile_meshes(replayer) -> void:
 
 		if p_type == BattleConstants.ProjectileType.ARROW:
 			_projectile_meshes[0].multimesh.set_instance_transform_2d(arrow_index, transform)
+			_projectile_meshes[0].multimesh.set_instance_color(arrow_index, Color(1, 1, 1, 1))
 			arrow_index += 1
 		else:
 			_projectile_meshes[1].multimesh.set_instance_transform_2d(fireball_index, transform)
+			_projectile_meshes[1].multimesh.set_instance_color(fireball_index, Color(1, 1, 1, 1))
 			fireball_index += 1
 
 func _update_tile_overlay(replayer) -> void:

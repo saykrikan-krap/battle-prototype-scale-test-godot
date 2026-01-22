@@ -22,6 +22,7 @@ var unit_y = PackedInt32Array()
 var prev_x = PackedInt32Array()
 var prev_y = PackedInt32Array()
 var last_move_tick = PackedInt32Array()
+var last_attack_tick = PackedInt32Array()
 var units_remaining = PackedInt32Array([0, 0])
 var tile_unit_count = PackedInt32Array()
 var tile_facing = PackedInt32Array()
@@ -75,6 +76,7 @@ func _event_scan_for_init() -> void:
 	prev_x.resize(unit_count)
 	prev_y.resize(unit_count)
 	last_move_tick.resize(unit_count)
+	last_attack_tick.resize(unit_count)
 
 func _reset_state() -> void:
 	event_index = 0
@@ -92,6 +94,7 @@ func _reset_state() -> void:
 		prev_x[i] = 0
 		prev_y[i] = 0
 		last_move_tick[i] = -1
+		last_attack_tick[i] = -1
 
 	var tile_count = grid_width * grid_height
 	tile_unit_count.resize(tile_count)
@@ -208,6 +211,10 @@ func _apply_event(index: int) -> void:
 				if to_x != from_x:
 					tile_facing[to_tile] = BattleConstants.Facing.RIGHT if to_x > from_x else BattleConstants.Facing.LEFT
 				tile_unit_count[to_tile] += 1
+		BattleConstants.EventType.MELEE_ATTACK_RESOLVED:
+			var attacker_id = event_log.a[index]
+			if attacker_id >= 0 and attacker_id < last_attack_tick.size():
+				last_attack_tick[attacker_id] = current_tick
 		BattleConstants.EventType.PROJECTILE_FIRED:
 			var pid = event_log.a[index]
 			var p_type = event_log.b[index]
@@ -216,6 +223,8 @@ func _apply_event(index: int) -> void:
 			var from_pos = BattleConstants.encode_pos(unit_x[shooter_id], unit_y[shooter_id])
 			var impact_tick = _compute_impact_tick(event_log.ticks[index], from_pos, target_pos, p_type)
 			_add_projectile(pid, p_type, from_pos, target_pos, event_log.ticks[index], impact_tick)
+			if shooter_id >= 0 and shooter_id < last_attack_tick.size():
+				last_attack_tick[shooter_id] = current_tick
 		BattleConstants.EventType.PROJECTILE_IMPACTED:
 			var impact_id = event_log.a[index]
 			_remove_projectile(impact_id)
