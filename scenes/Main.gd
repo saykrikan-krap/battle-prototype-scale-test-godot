@@ -53,6 +53,7 @@ func _process(delta: float) -> void:
 		if not _resolving:
 			_replayer.update(delta)
 		_battle_view.render(_replayer)
+		_update_hover_panel()
 
 	_update_debug_overlay()
 
@@ -144,6 +145,20 @@ func _run_headless_resolve() -> void:
 		print("Event count: %d" % battle_result.event_count)
 		print("Event hash: %08x" % battle_result.event_hash)
 	get_tree().quit()
+
+func _update_hover_panel() -> void:
+	if _battle_ui == null or _battle_view == null or _replayer == null:
+		return
+	var tile = _battle_view.get_hovered_tile()
+	var unit_types = []
+	if tile.x >= 0:
+		var unit_count = _replayer.unit_alive.size()
+		for id in range(unit_count):
+			if _replayer.unit_alive[id] == 0:
+				continue
+			if _replayer.unit_x[id] == tile.x and _replayer.unit_y[id] == tile.y:
+				unit_types.append(_replayer.unit_type[id])
+	_battle_ui.set_hovered_units(tile, unit_types)
 
 func _show_preview(input) -> void:
 	var log = EventLog.new()

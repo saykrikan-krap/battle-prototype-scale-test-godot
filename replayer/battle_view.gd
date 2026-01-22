@@ -57,6 +57,7 @@ var _unit_meshes = []
 var _projectile_meshes = []
 var _zoom: float = VIEW_SCALE
 var _tile_side = PackedInt32Array()
+var _hovered_tile = Vector2i(-1, -1)
 
 func _ready() -> void:
 	_zoom = VIEW_SCALE
@@ -70,6 +71,7 @@ func _input(event) -> void:
 			_apply_zoom(_zoom - ZOOM_STEP, event.position)
 
 func _process(delta: float) -> void:
+	_update_hovered_tile()
 	var direction = Vector2.ZERO
 	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
 		direction.y -= 1.0
@@ -84,6 +86,25 @@ func _process(delta: float) -> void:
 		if _zoom < 1.0:
 			pan_scale = 1.0 / _zoom
 		position -= direction.normalized() * (PAN_SPEED * delta * pan_scale)
+
+func _update_hovered_tile() -> void:
+	if grid_width <= 0 or grid_height <= 0:
+		if _hovered_tile.x != -1:
+			_hovered_tile = Vector2i(-1, -1)
+			queue_redraw()
+		return
+	var local = get_local_mouse_position()
+	var tile_x = int(floor(local.x / TILE_SIZE))
+	var tile_y = int(floor(local.y / TILE_SIZE))
+	var next_tile = Vector2i(-1, -1)
+	if local.x >= 0.0 and local.y >= 0.0 and tile_x < grid_width and tile_y < grid_height:
+		next_tile = Vector2i(tile_x, tile_y)
+	if next_tile != _hovered_tile:
+		_hovered_tile = next_tile
+		queue_redraw()
+
+func get_hovered_tile() -> Vector2i:
+	return _hovered_tile
 
 func _apply_zoom(target_zoom: float, mouse_pos: Vector2) -> void:
 	var clamped = clamp(target_zoom, MIN_ZOOM, MAX_ZOOM)
@@ -126,6 +147,13 @@ func _draw() -> void:
 	for y in range(grid_height + 1):
 		var py = y * TILE_SIZE
 		draw_line(Vector2(0, py), Vector2(total_width, py), line_color)
+	if _hovered_tile.x >= 0:
+		draw_rect(
+			Rect2(_hovered_tile.x * TILE_SIZE, _hovered_tile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE),
+			Color(1, 1, 1, 0.9),
+			false,
+			2.0
+		)
 
 func render(replayer) -> void:
 	if replayer == null:
