@@ -149,8 +149,8 @@ Keep “one-hit removal,” but allow melee hit chance to vary by unit type:
 
 ### Ranges & Projectiles (unchanged)
 - Distance metric: **Manhattan**
-- Archer range: **5**
-- Mage fireball range: **6**
+- Archer range: **10**
+- Mage fireball range: **20**
 - Minimum ranged distance: **1** (cannot target own tile)
 
 Projectile speed:
@@ -248,12 +248,12 @@ AI is intentionally simple, but must be deterministic and avoid pathological com
 Same as infantry logic, but using their move/attack costs.
 
 ### Archer
-1. Shoot nearest enemy tile in range (≤ 5).
+1. Shoot nearest enemy tile in range (≤ 10).
 2. Else move toward nearest enemy tile.
 3. Else wait.
 
 ### Mage
-1. If any enemy tiles in range (≤ 6), choose the tile in range with **most enemies** (ties broken deterministically), fireball.
+1. If any enemy tiles in range (≤ 20), choose the tile in range with **most enemies** (ties broken deterministically), fireball.
 2. Else move toward nearest enemy tile.
 3. Else wait.
 
