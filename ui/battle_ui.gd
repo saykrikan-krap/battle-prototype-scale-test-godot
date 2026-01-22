@@ -353,12 +353,18 @@ func _build_unit_details_modal() -> void:
 
 	_details_unit_normal_style = StyleBoxFlat.new()
 	_details_unit_normal_style.bg_color = Color(0, 0, 0, 0)
-	_details_unit_normal_style.border_width_all = 1
+	_details_unit_normal_style.border_width_left = 1
+	_details_unit_normal_style.border_width_top = 1
+	_details_unit_normal_style.border_width_right = 1
+	_details_unit_normal_style.border_width_bottom = 1
 	_details_unit_normal_style.border_color = Color(1, 1, 1, 0.2)
 
 	_details_unit_selected_style = StyleBoxFlat.new()
 	_details_unit_selected_style.bg_color = Color(1, 1, 1, 0.08)
-	_details_unit_selected_style.border_width_all = 2
+	_details_unit_selected_style.border_width_left = 2
+	_details_unit_selected_style.border_width_top = 2
+	_details_unit_selected_style.border_width_right = 2
+	_details_unit_selected_style.border_width_bottom = 2
 	_details_unit_selected_style.border_color = Color(1, 1, 1, 0.9)
 
 	_details_unit_strip = HBoxContainer.new()
