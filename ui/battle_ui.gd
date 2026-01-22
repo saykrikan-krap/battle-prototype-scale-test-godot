@@ -26,6 +26,8 @@ var _details_panel: PanelContainer
 var _details_title: Label
 var _details_icon: TextureRect
 var _details_name: Label
+var _details_unit_strip: HBoxContainer
+var _details_unit_slots = []
 var _details_stats: GridContainer
 var _details_stat_values = []
 var _details_prev: Button
@@ -35,6 +37,8 @@ var _details_close: Button
 var _details_units: Array = []
 var _details_tile: Vector2i = Vector2i(-1, -1)
 var _details_index: int = 0
+var _details_unit_normal_style: StyleBoxFlat
+var _details_unit_selected_style: StyleBoxFlat
 
 var _playing: bool = true
 var _resolving: bool = false
@@ -195,6 +199,8 @@ func set_hovered_units(tile: Vector2i, unit_types: Array) -> void:
 
 func show_unit_details(tile: Vector2i, units: Array) -> void:
 	_ensure_unit_textures()
+	if units.is_empty():
+		return
 	_details_tile = tile
 	_details_units = units.duplicate()
 	_details_index = 0
@@ -345,6 +351,45 @@ func _build_unit_details_modal() -> void:
 	_details_name.text = ""
 	details_vbox.add_child(_details_name)
 
+	_details_unit_normal_style = StyleBoxFlat.new()
+	_details_unit_normal_style.bg_color = Color(0, 0, 0, 0)
+	_details_unit_normal_style.border_width_all = 1
+	_details_unit_normal_style.border_color = Color(1, 1, 1, 0.2)
+
+	_details_unit_selected_style = StyleBoxFlat.new()
+	_details_unit_selected_style.bg_color = Color(1, 1, 1, 0.08)
+	_details_unit_selected_style.border_width_all = 2
+	_details_unit_selected_style.border_color = Color(1, 1, 1, 0.9)
+
+	_details_unit_strip = HBoxContainer.new()
+	_details_unit_strip.add_theme_constant_override("separation", 6)
+	details_vbox.add_child(_details_unit_strip)
+
+	for i in range(4):
+		var slot = PanelContainer.new()
+		slot.custom_minimum_size = Vector2(38, 38)
+		slot.add_theme_stylebox_override("panel", _details_unit_normal_style)
+		_details_unit_strip.add_child(slot)
+
+		var margin = MarginContainer.new()
+		margin.add_theme_constant_override("margin_left", 4)
+		margin.add_theme_constant_override("margin_top", 4)
+		margin.add_theme_constant_override("margin_right", 4)
+		margin.add_theme_constant_override("margin_bottom", 4)
+		slot.add_child(margin)
+
+		var icon = TextureRect.new()
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		icon.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		margin.add_child(icon)
+
+		_details_unit_slots.append({
+			"slot": slot,
+			"icon": icon,
+		})
+
 	_details_stats = GridContainer.new()
 	_details_stats.columns = 2
 	_details_stats.add_theme_constant_override("h_separation", 12)
@@ -420,6 +465,7 @@ func _update_unit_details() -> void:
 	if _details_units.is_empty():
 		_details_name.text = "No units on this tile."
 		_details_icon.visible = false
+		_details_unit_strip.visible = false
 		_details_stats.visible = false
 		_details_count.text = "0 units"
 		_details_prev.disabled = true
@@ -427,6 +473,7 @@ func _update_unit_details() -> void:
 		return
 
 	_details_icon.visible = true
+	_details_unit_strip.visible = true
 	_details_stats.visible = true
 
 	if _details_index < 0:
@@ -438,6 +485,18 @@ func _update_unit_details() -> void:
 	var unit_type = int(unit.get("unit_type", 0))
 	_details_icon.texture = _unit_textures[unit_type]
 	_details_name.text = UNIT_NAMES[unit_type]
+
+	for i in range(_details_unit_slots.size()):
+		var entry = _details_unit_slots[i]
+		if i < _details_units.size():
+			var slot_unit = _details_units[i]
+			var slot_type = int(slot_unit.get("unit_type", 0))
+			entry["slot"].visible = true
+			entry["icon"].texture = _unit_textures[slot_type]
+			var style = _details_unit_selected_style if i == _details_index else _details_unit_normal_style
+			entry["slot"].add_theme_stylebox_override("panel", style)
+		else:
+			entry["slot"].visible = false
 
 	var side_value = int(unit.get("side", 0))
 	var side_label = "Red" if side_value == 0 else "Blue"

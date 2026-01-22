@@ -100,10 +100,14 @@ func _unhandled_input(event) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if _resolving or _battle_view == null or _battle_ui == null or _replayer == null:
 			return
+		if _battle_ui.is_unit_details_visible():
+			return
 		var tile = _battle_view.get_hovered_tile()
 		if tile.x < 0:
 			return
 		var units = _collect_units_on_tile(tile)
+		if units.is_empty():
+			return
 		_open_unit_details(tile, units)
 
 func _on_play_toggled(playing: bool) -> void:
