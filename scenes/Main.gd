@@ -6,6 +6,7 @@ const BattleReplayer = preload("res://replayer/battle_replayer.gd")
 const BattleView = preload("res://replayer/battle_view.gd")
 const BattleUI = preload("res://ui/battle_ui.gd")
 const ScaleTestV1 = preload("res://scenarios/scale_test_v1.gd")
+const EventLog = preload("res://schema/event_log.gd")
 
 const DEFAULT_TPS = 20
 
@@ -34,7 +35,10 @@ func _ready() -> void:
 	_battle_ui.step_requested.connect(_on_step_requested)
 	_battle_ui.speed_changed.connect(_on_speed_changed)
 
-	_start_resolve()
+	var input = ScaleTestV1.build()
+	_show_preview(input)
+	_battle_ui.set_start_overlay_visible(true)
+	_battle_ui.set_resolving(false)
 
 func _process(delta: float) -> void:
 	if _resolving and _resolver_thread != null and not _resolver_thread.is_alive():
@@ -43,8 +47,9 @@ func _process(delta: float) -> void:
 		_battle_ui.set_resolving(false)
 		_on_resolve_complete(result)
 
-	if _replayer != null and not _resolving:
-		_replayer.update(delta)
+	if _replayer != null:
+		if not _resolving:
+			_replayer.update(delta)
 		_battle_view.render(_replayer)
 
 	_update_debug_overlay()
@@ -54,8 +59,8 @@ func _start_resolve() -> void:
 		return
 	_resolving = true
 	_battle_ui.set_resolving(true)
+	_battle_ui.set_start_overlay_visible(true)
 	_battle_ui.set_playing(false)
-	_replayer = null
 	_last_event_log = null
 	_last_result = null
 
@@ -76,6 +81,7 @@ func _on_resolve_complete(result: Dictionary) -> void:
 	_replayer.set_ticks_per_second(_current_tps)
 	_replayer.set_playing(true)
 	_battle_ui.set_playing(true)
+	_battle_ui.set_start_overlay_visible(false)
 
 func _on_play_toggled(playing: bool) -> void:
 	if _replayer == null:
@@ -130,3 +136,30 @@ func _run_headless_resolve() -> void:
 		print("Event count: %d" % battle_result.event_count)
 		print("Event hash: %08x" % battle_result.event_hash)
 	get_tree().quit()
+
+func _show_preview(input) -> void:
+	var log = EventLog.new()
+	log.add_event(
+		0,
+		0,
+		BattleConstants.EventType.BATTLE_INIT,
+		input.grid_width,
+		input.grid_height,
+		input.time_limit_ticks,
+		input.unit_count()
+	)
+	for i in range(input.unit_count()):
+		var unit_id = input.unit_ids[i]
+		log.add_event(
+			0,
+			unit_id,
+			BattleConstants.EventType.UNIT_SPAWNED,
+			unit_id,
+			input.unit_sides[i],
+			input.unit_types[i],
+			BattleConstants.encode_pos(input.unit_x[i], input.unit_y[i])
+		)
+	_replayer = BattleReplayer.new()
+	_replayer.initialize_from_log(log)
+	_replayer.set_ticks_per_second(_current_tps)
+	_replayer.set_playing(false)
