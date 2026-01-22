@@ -16,6 +16,10 @@ var _panel: PanelContainer
 var _start_overlay: PanelContainer
 var _start_button: Button
 var _spinner_label: Label
+var _hover_panel: PanelContainer
+var _hover_title: Label
+var _hover_entries = []
+var _unit_textures = []
 
 var _playing: bool = true
 var _resolving: bool = false
@@ -23,6 +27,26 @@ var _spinner_frames = ["|", "/", "-", "\\"]
 var _spinner_index: int = 0
 var _spinner_elapsed: float = 0.0
 var _spinner_interval: float = 0.12
+
+const UNIT_TEXTURE_PATHS = [
+	"res://assets/sprites/units/infantry.png",
+	"res://assets/sprites/units/heavy_infantry.png",
+	"res://assets/sprites/units/elite_infantry.png",
+	"res://assets/sprites/units/archer.png",
+	"res://assets/sprites/units/cavalry.png",
+	"res://assets/sprites/units/heavy_cavalry.png",
+	"res://assets/sprites/units/mage.png",
+]
+
+const UNIT_NAMES = [
+	"Infantry",
+	"Heavy Infantry",
+	"Elite Infantry",
+	"Archer",
+	"Cavalry",
+	"Heavy Cavalry",
+	"Mage",
+]
 
 func _ready() -> void:
 	_panel = PanelContainer.new()
@@ -105,6 +129,7 @@ func _ready() -> void:
 	overlay_box.add_child(_spinner_label)
 
 	set_start_overlay_visible(true)
+	_build_hover_panel()
 
 func set_resolving(resolving: bool) -> void:
 	_resolving = resolving
@@ -130,6 +155,19 @@ func set_start_overlay_visible(visible: bool) -> void:
 func set_debug_text(text: String) -> void:
 	_debug_label.text = text
 
+func set_hovered_units(tile: Vector2i, unit_types: Array) -> void:
+	_ensure_unit_textures()
+	if tile.x < 0:
+		_hover_title.text = "Hover a tile"
+		_set_hover_entries([])
+		return
+	if unit_types.is_empty():
+		_hover_title.text = "Tile %d,%d (empty)" % [tile.x, tile.y]
+		_set_hover_entries([])
+		return
+	_hover_title.text = "Tile %d,%d" % [tile.x, tile.y]
+	_set_hover_entries(unit_types)
+
 func _on_resolve_pressed() -> void:
 	emit_signal("resolve_requested")
 
@@ -154,3 +192,78 @@ func _process(delta: float) -> void:
 	_spinner_elapsed = 0.0
 	_spinner_index = (_spinner_index + 1) % _spinner_frames.size()
 	_spinner_label.text = "%s Resolving..." % _spinner_frames[_spinner_index]
+
+func _build_hover_panel() -> void:
+	_hover_panel = PanelContainer.new()
+	_hover_panel.anchor_left = 1.0
+	_hover_panel.anchor_top = 1.0
+	_hover_panel.anchor_right = 1.0
+	_hover_panel.anchor_bottom = 1.0
+	_hover_panel.offset_left = -300
+	_hover_panel.offset_top = -200
+	_hover_panel.offset_right = -10
+	_hover_panel.offset_bottom = -10
+	add_child(_hover_panel)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	_hover_panel.add_child(vbox)
+
+	_hover_title = Label.new()
+	_hover_title.text = "Hover a tile"
+	vbox.add_child(_hover_title)
+
+	var grid = GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 8)
+	vbox.add_child(grid)
+
+	for i in range(4):
+		var row = HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		grid.add_child(row)
+
+		var icon = TextureRect.new()
+		icon.custom_minimum_size = Vector2(28, 28)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		row.add_child(icon)
+
+		var label = Label.new()
+		label.text = ""
+		row.add_child(label)
+
+		_hover_entries.append({
+			"row": row,
+			"icon": icon,
+			"label": label,
+		})
+
+func _ensure_unit_textures() -> void:
+	if _unit_textures.size() > 0:
+		return
+	_unit_textures.resize(UNIT_TEXTURE_PATHS.size())
+	for i in range(UNIT_TEXTURE_PATHS.size()):
+		_unit_textures[i] = _load_texture(UNIT_TEXTURE_PATHS[i])
+
+func _load_texture(path: String) -> Texture2D:
+	var image = Image.new()
+	var err = image.load(path)
+	if err != OK:
+		var fallback = Image.create(1, 1, false, Image.FORMAT_RGBA8)
+		fallback.fill(Color(0.2, 0.2, 0.2))
+		return ImageTexture.create_from_image(fallback)
+	return ImageTexture.create_from_image(image)
+
+func _set_hover_entries(unit_types: Array) -> void:
+	for i in range(_hover_entries.size()):
+		var entry = _hover_entries[i]
+		var row = entry["row"]
+		if i < unit_types.size():
+			var unit_type = int(unit_types[i])
+			row.visible = true
+			entry["icon"].texture = _unit_textures[unit_type]
+			entry["label"].text = UNIT_NAMES[unit_type]
+		else:
+			row.visible = false
