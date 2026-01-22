@@ -223,6 +223,8 @@ func _apply_event(index: int) -> void:
 			var from_pos = BattleConstants.encode_pos(unit_x[shooter_id], unit_y[shooter_id])
 			var impact_tick = _compute_impact_tick(event_log.ticks[index], from_pos, target_pos, p_type)
 			_add_projectile(pid, p_type, from_pos, target_pos, event_log.ticks[index], impact_tick)
+			if shooter_id >= 0 and shooter_id < last_attack_tick.size():
+				last_attack_tick[shooter_id] = current_tick
 		BattleConstants.EventType.PROJECTILE_IMPACTED:
 			var impact_id = event_log.a[index]
 			_remove_projectile(impact_id)
