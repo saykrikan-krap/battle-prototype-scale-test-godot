@@ -214,7 +214,7 @@ func _apply_event(index: int) -> void:
 		BattleConstants.EventType.MELEE_ATTACK_RESOLVED:
 			var attacker_id = event_log.a[index]
 			if attacker_id >= 0 and attacker_id < last_attack_tick.size():
-				last_attack_tick[attacker_id] = event_log.ticks[index]
+				last_attack_tick[attacker_id] = current_tick
 		BattleConstants.EventType.PROJECTILE_FIRED:
 			var pid = event_log.a[index]
 			var p_type = event_log.b[index]
