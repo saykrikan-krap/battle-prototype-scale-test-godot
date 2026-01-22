@@ -271,10 +271,10 @@ func _update_unit_meshes(replayer) -> void:
 		type_offsets[t] = idx + 1
 		var color = Color(1, 1, 1, 1)
 		if replayer.last_attack_tick.size() == unit_count:
-			var flash_age = (float(replayer.current_tick) + replayer.tick_alpha()) - float(replayer.last_attack_tick[id])
-			if flash_age >= 0.0 and flash_age <= 1.0:
-				var blink = fmod(flash_age * 4.0, 2.0) < 1.0
-				if blink:
+			var last_attack = replayer.last_attack_tick[id]
+			if last_attack >= 0:
+				var flash_age = (float(replayer.current_tick) + replayer.tick_alpha()) - float(last_attack)
+				if flash_age >= 0.0 and flash_age <= 0.5:
 					color = Color(1.0, 0.35, 0.2, 1.0)
 
 		var transform = Transform2D.IDENTITY
