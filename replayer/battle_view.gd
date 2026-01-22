@@ -1,0 +1,218 @@
+class_name BattleView
+extends Node2D
+
+const BattleConstants = preload("res://schema/constants.gd")
+
+const TILE_SIZE = 24.0
+const UNIT_SCALE = 0.42
+const PROJECTILE_SCALE = 0.2
+
+const SLOT_OFFSETS = [
+	Vector2(-0.25, -0.25),
+	Vector2(0.25, -0.25),
+	Vector2(-0.25, 0.25),
+	Vector2(0.25, 0.25),
+]
+
+var grid_width: int = 0
+var grid_height: int = 0
+
+var _texture: Texture2D
+var _unit_meshes = []
+var _projectile_meshes = []
+
+func setup(width: int, height: int) -> void:
+	if width == grid_width and height == grid_height and _unit_meshes.size() > 0:
+		return
+	grid_width = width
+	grid_height = height
+	_ensure_meshes()
+	queue_redraw()
+
+func _draw() -> void:
+	if grid_width <= 0 or grid_height <= 0:
+		return
+	var total_width = grid_width * TILE_SIZE
+	var total_height = grid_height * TILE_SIZE
+	draw_rect(Rect2(0, 0, total_width, total_height), Color(0.08, 0.09, 0.12))
+
+	var line_color = Color(0.18, 0.2, 0.25)
+	for x in range(grid_width + 1):
+		var px = x * TILE_SIZE
+		draw_line(Vector2(px, 0), Vector2(px, total_height), line_color)
+	for y in range(grid_height + 1):
+		var py = y * TILE_SIZE
+		draw_line(Vector2(0, py), Vector2(total_width, py), line_color)
+
+func render(replayer) -> void:
+	if replayer == null:
+		return
+	setup(replayer.grid_width, replayer.grid_height)
+	if replayer.unit_alive.size() == 0:
+		return
+
+	_update_unit_meshes(replayer)
+	_update_projectile_meshes(replayer)
+
+func _ensure_meshes() -> void:
+	if _texture == null:
+		var image = Image.create(1, 1, false, Image.FORMAT_RGBA8)
+		image.fill(Color.WHITE)
+		_texture = ImageTexture.create_from_image(image)
+
+	if _unit_meshes.size() == 0:
+		var colors = [
+			Color(0.8, 0.8, 0.8),
+			Color(0.5, 0.5, 0.5),
+			Color(0.9, 0.8, 0.3),
+			Color(0.2, 0.7, 0.2),
+			Color(0.2, 0.4, 0.9),
+			Color(0.1, 0.2, 0.6),
+			Color(0.9, 0.4, 0.1),
+		]
+		for color in colors:
+			var instance = _make_multimesh_instance(color)
+			_unit_meshes.append(instance)
+			add_child(instance)
+
+	if _projectile_meshes.size() == 0:
+		var arrow = _make_multimesh_instance(Color(0.95, 0.9, 0.7))
+		var fireball = _make_multimesh_instance(Color(0.95, 0.3, 0.1))
+		_projectile_meshes.append(arrow)
+		_projectile_meshes.append(fireball)
+		add_child(arrow)
+		add_child(fireball)
+
+func _make_multimesh_instance(color: Color) -> MultiMeshInstance2D:
+	var multimesh = MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_2D
+	var quad = QuadMesh.new()
+	quad.size = Vector2(1.0, 1.0)
+	multimesh.mesh = quad
+	multimesh.instance_count = 0
+
+	var instance = MultiMeshInstance2D.new()
+	instance.multimesh = multimesh
+	instance.texture = _texture
+	instance.modulate = color
+	return instance
+
+func _update_unit_meshes(replayer) -> void:
+	var unit_count = replayer.unit_alive.size()
+	var type_counts = PackedInt32Array()
+	type_counts.resize(_unit_meshes.size())
+	for i in range(_unit_meshes.size()):
+		type_counts[i] = 0
+
+	for id in range(unit_count):
+		if replayer.unit_alive[id] == 1:
+			type_counts[replayer.unit_type[id]] += 1
+
+	for t in range(_unit_meshes.size()):
+		_unit_meshes[t].multimesh.instance_count = type_counts[t]
+
+	var type_offsets = PackedInt32Array()
+	type_offsets.resize(_unit_meshes.size())
+	for t in range(_unit_meshes.size()):
+		type_offsets[t] = 0
+
+	var tile_slots = PackedInt32Array()
+	tile_slots.resize(grid_width * grid_height)
+	for i in range(tile_slots.size()):
+		tile_slots[i] = 0
+
+	var alpha = replayer.tick_alpha()
+	var unit_pixel_size = TILE_SIZE * UNIT_SCALE
+	var half_unit = Vector2(unit_pixel_size * 0.5, unit_pixel_size * 0.5)
+
+	for id in range(unit_count):
+		if replayer.unit_alive[id] == 0:
+			continue
+		var ux = replayer.unit_x[id]
+		var uy = replayer.unit_y[id]
+		var tile = ux + uy * grid_width
+		var slot = tile_slots[tile]
+		tile_slots[tile] = slot + 1
+		var offset = _slot_offset(slot)
+
+		var to_pos = _tile_center(ux, uy) + offset
+		var draw_pos = to_pos
+		if replayer.last_move_tick[id] == replayer.current_tick:
+			var from_pos = _tile_center(replayer.prev_x[id], replayer.prev_y[id]) + offset
+			draw_pos = from_pos.lerp(to_pos, alpha)
+
+		var t = replayer.unit_type[id]
+		var idx = type_offsets[t]
+		type_offsets[t] = idx + 1
+
+		var transform = Transform2D.IDENTITY
+		transform = transform.scaled(Vector2(unit_pixel_size, unit_pixel_size))
+		transform.origin = draw_pos - half_unit
+		_unit_meshes[t].multimesh.set_instance_transform_2d(idx, transform)
+
+func _update_projectile_meshes(replayer) -> void:
+	var count = replayer.projectile_ids.size()
+	if count == 0:
+		_projectile_meshes[0].multimesh.instance_count = 0
+		_projectile_meshes[1].multimesh.instance_count = 0
+		return
+
+	var arrow_count = 0
+	var fireball_count = 0
+	for i in range(count):
+		if replayer.projectile_type[i] == BattleConstants.ProjectileType.ARROW:
+			arrow_count += 1
+		else:
+			fireball_count += 1
+
+	_projectile_meshes[0].multimesh.instance_count = arrow_count
+	_projectile_meshes[1].multimesh.instance_count = fireball_count
+
+	var arrow_index = 0
+	var fireball_index = 0
+	var time = float(replayer.current_tick) + replayer.tick_alpha()
+	var projectile_pixel_size = TILE_SIZE * PROJECTILE_SCALE
+	var half_projectile = Vector2(projectile_pixel_size * 0.5, projectile_pixel_size * 0.5)
+
+	for i in range(count):
+		var p_type = replayer.projectile_type[i]
+		var from_pos = replayer.projectile_from[i]
+		var to_pos = replayer.projectile_to[i]
+		var fire_tick = replayer.projectile_fire_tick[i]
+		var impact_tick = replayer.projectile_impact_tick[i]
+		var total = float(impact_tick - fire_tick)
+		var t = 1.0
+		if total > 0.0:
+			t = clamp((time - float(fire_tick)) / total, 0.0, 1.0)
+
+		var from_world = _tile_center(
+			BattleConstants.decode_x(from_pos),
+			BattleConstants.decode_y(from_pos)
+		)
+		var to_world = _tile_center(
+			BattleConstants.decode_x(to_pos),
+			BattleConstants.decode_y(to_pos)
+		)
+		var draw_pos = from_world.lerp(to_world, t)
+
+		var transform = Transform2D.IDENTITY
+		transform = transform.scaled(Vector2(projectile_pixel_size, projectile_pixel_size))
+		transform.origin = draw_pos - half_projectile
+
+		if p_type == BattleConstants.ProjectileType.ARROW:
+			_projectile_meshes[0].multimesh.set_instance_transform_2d(arrow_index, transform)
+			arrow_index += 1
+		else:
+			_projectile_meshes[1].multimesh.set_instance_transform_2d(fireball_index, transform)
+			fireball_index += 1
+
+func _tile_center(x: int, y: int) -> Vector2:
+	return Vector2((float(x) + 0.5) * TILE_SIZE, (float(y) + 0.5) * TILE_SIZE)
+
+func _slot_offset(slot: int) -> Vector2:
+	var clamped = slot
+	if clamped < 0:
+		clamped = 0
+	if clamped >= SLOT_OFFSETS.size():
+		clamped = SLOT_OFFSETS.size() - 1
+	return SLOT_OFFSETS[clamped] * TILE_SIZE

@@ -1,0 +1,236 @@
+class_name BattleReplayer
+extends Object
+
+const BattleConstants = preload("res://schema/constants.gd")
+
+var event_log
+var event_index: int = 0
+var current_tick: int = 0
+var tick_accumulator: float = 0.0
+var ticks_per_second: int = 20
+var playing: bool = false
+var end_tick: int = 0
+
+var grid_width: int = 0
+var grid_height: int = 0
+
+var unit_alive = PackedInt32Array()
+var unit_side = PackedInt32Array()
+var unit_type = PackedInt32Array()
+var unit_x = PackedInt32Array()
+var unit_y = PackedInt32Array()
+var prev_x = PackedInt32Array()
+var prev_y = PackedInt32Array()
+var last_move_tick = PackedInt32Array()
+var units_remaining = PackedInt32Array([0, 0])
+
+var projectile_ids = []
+var projectile_type = []
+var projectile_from = []
+var projectile_to = []
+var projectile_fire_tick = []
+var projectile_impact_tick = []
+var projectile_index_by_id = {}
+
+func initialize_from_log(log) -> void:
+	event_log = log
+	_event_scan_for_init()
+	_reset_state()
+	apply_events_for_tick(0)
+	playing = true
+
+func _event_scan_for_init() -> void:
+	var count = event_log.count()
+	var max_unit_id = -1
+	var unit_count = 0
+	end_tick = 0
+	grid_width = 0
+	grid_height = 0
+
+	for i in range(count):
+		var event_type = event_log.types[i]
+		if event_type == BattleConstants.EventType.BATTLE_INIT:
+			grid_width = event_log.a[i]
+			grid_height = event_log.b[i]
+			unit_count = event_log.d[i]
+		elif event_type == BattleConstants.EventType.UNIT_SPAWNED:
+			var unit_id = event_log.a[i]
+			if unit_id > max_unit_id:
+				max_unit_id = unit_id
+		elif event_type == BattleConstants.EventType.BATTLE_ENDED:
+			end_tick = event_log.b[i]
+
+	if unit_count <= 0:
+		unit_count = max_unit_id + 1
+	if unit_count < 0:
+		unit_count = 0
+
+	unit_alive.resize(unit_count)
+	unit_side.resize(unit_count)
+	unit_type.resize(unit_count)
+	unit_x.resize(unit_count)
+	unit_y.resize(unit_count)
+	prev_x.resize(unit_count)
+	prev_y.resize(unit_count)
+	last_move_tick.resize(unit_count)
+
+func _reset_state() -> void:
+	event_index = 0
+	current_tick = 0
+	tick_accumulator = 0.0
+	units_remaining[0] = 0
+	units_remaining[1] = 0
+
+	for i in range(unit_alive.size()):
+		unit_alive[i] = 0
+		unit_side[i] = 0
+		unit_type[i] = 0
+		unit_x[i] = 0
+		unit_y[i] = 0
+		prev_x[i] = 0
+		prev_y[i] = 0
+		last_move_tick[i] = -1
+
+	projectile_ids.clear()
+	projectile_type.clear()
+	projectile_from.clear()
+	projectile_to.clear()
+	projectile_fire_tick.clear()
+	projectile_impact_tick.clear()
+	projectile_index_by_id.clear()
+
+func set_playing(value: bool) -> void:
+	playing = value
+
+func set_ticks_per_second(value: int) -> void:
+	ticks_per_second = value
+
+func step_tick() -> void:
+	if event_log == null:
+		return
+	if end_tick > 0 and current_tick >= end_tick:
+		return
+	current_tick += 1
+	apply_events_for_tick(current_tick)
+	tick_accumulator = 0.0
+
+func update(delta: float) -> void:
+	if event_log == null:
+		return
+	if not playing:
+		return
+	if end_tick > 0 and current_tick >= end_tick:
+		playing = false
+		return
+	
+	tick_accumulator += delta * float(ticks_per_second)
+	while tick_accumulator >= 1.0:
+		current_tick += 1
+		apply_events_for_tick(current_tick)
+		tick_accumulator -= 1.0
+		if end_tick > 0 and current_tick >= end_tick:
+			playing = false
+			break
+
+func tick_alpha() -> float:
+	return tick_accumulator
+
+func apply_events_for_tick(tick: int) -> void:
+	if event_log == null:
+		return
+	var total = event_log.count()
+	while event_index < total and event_log.ticks[event_index] <= tick:
+		_apply_event(event_index)
+		event_index += 1
+
+func _apply_event(index: int) -> void:
+	var event_type = event_log.types[index]
+	match event_type:
+		BattleConstants.EventType.BATTLE_INIT:
+			grid_width = event_log.a[index]
+			grid_height = event_log.b[index]
+		BattleConstants.EventType.UNIT_SPAWNED:
+			var unit_id = event_log.a[index]
+			var side = event_log.b[index]
+			var u_type = event_log.c[index]
+			var pos = event_log.d[index]
+			var x = BattleConstants.decode_x(pos)
+			var y = BattleConstants.decode_y(pos)
+			unit_alive[unit_id] = 1
+			unit_side[unit_id] = side
+			unit_type[unit_id] = u_type
+			unit_x[unit_id] = x
+			unit_y[unit_id] = y
+			prev_x[unit_id] = x
+			prev_y[unit_id] = y
+			last_move_tick[unit_id] = -1
+			units_remaining[side] += 1
+		BattleConstants.EventType.UNIT_MOVED:
+			var move_id = event_log.a[index]
+			var from_pos = event_log.b[index]
+			var to_pos = event_log.c[index]
+			prev_x[move_id] = BattleConstants.decode_x(from_pos)
+			prev_y[move_id] = BattleConstants.decode_y(from_pos)
+			unit_x[move_id] = BattleConstants.decode_x(to_pos)
+			unit_y[move_id] = BattleConstants.decode_y(to_pos)
+			last_move_tick[move_id] = event_log.ticks[index]
+		BattleConstants.EventType.PROJECTILE_FIRED:
+			var pid = event_log.a[index]
+			var p_type = event_log.b[index]
+			var shooter_id = event_log.c[index]
+			var target_pos = event_log.d[index]
+			var from_pos = BattleConstants.encode_pos(unit_x[shooter_id], unit_y[shooter_id])
+			var impact_tick = _compute_impact_tick(event_log.ticks[index], from_pos, target_pos, p_type)
+			_add_projectile(pid, p_type, from_pos, target_pos, event_log.ticks[index], impact_tick)
+		BattleConstants.EventType.PROJECTILE_IMPACTED:
+			var impact_id = event_log.a[index]
+			_remove_projectile(impact_id)
+		BattleConstants.EventType.UNIT_REMOVED:
+			var removed_id = event_log.a[index]
+			if unit_alive[removed_id] == 1:
+				unit_alive[removed_id] = 0
+				units_remaining[unit_side[removed_id]] -= 1
+		BattleConstants.EventType.BATTLE_ENDED:
+			end_tick = event_log.b[index]
+		_:
+			pass
+
+func _compute_impact_tick(fire_tick: int, from_pos: int, to_pos: int, p_type: int) -> int:
+	var fx = BattleConstants.decode_x(from_pos)
+	var fy = BattleConstants.decode_y(from_pos)
+	var tx = BattleConstants.decode_x(to_pos)
+	var ty = BattleConstants.decode_y(to_pos)
+	var distance = abs(tx - fx) + abs(ty - fy)
+	var speed = BattleConstants.PROJECTILE_SPEED[p_type]
+	return fire_tick + (speed * distance)
+
+func _add_projectile(pid: int, p_type: int, from_pos: int, to_pos: int, fire_tick: int, impact_tick: int) -> void:
+	projectile_index_by_id[pid] = projectile_ids.size()
+	projectile_ids.append(pid)
+	projectile_type.append(p_type)
+	projectile_from.append(from_pos)
+	projectile_to.append(to_pos)
+	projectile_fire_tick.append(fire_tick)
+	projectile_impact_tick.append(impact_tick)
+
+func _remove_projectile(pid: int) -> void:
+	if not projectile_index_by_id.has(pid):
+		return
+	var index = projectile_index_by_id[pid]
+	var last_index = projectile_ids.size() - 1
+	if index != last_index:
+		var swap_id = projectile_ids[last_index]
+		projectile_ids[index] = swap_id
+		projectile_type[index] = projectile_type[last_index]
+		projectile_from[index] = projectile_from[last_index]
+		projectile_to[index] = projectile_to[last_index]
+		projectile_fire_tick[index] = projectile_fire_tick[last_index]
+		projectile_impact_tick[index] = projectile_impact_tick[last_index]
+		projectile_index_by_id[swap_id] = index
+	projectile_ids.resize(last_index)
+	projectile_type.resize(last_index)
+	projectile_from.resize(last_index)
+	projectile_to.resize(last_index)
+	projectile_fire_tick.resize(last_index)
+	projectile_impact_tick.resize(last_index)
+	projectile_index_by_id.erase(pid)
