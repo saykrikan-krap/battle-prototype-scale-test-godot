@@ -15,6 +15,11 @@ var unit_sizes = PackedInt32Array()
 var unit_x = PackedInt32Array()
 var unit_y = PackedInt32Array()
 var unit_next_tick = PackedInt32Array()
+var unit_squad_ids = PackedInt32Array()
+
+var squad_ids = PackedInt32Array()
+var squad_sides = PackedInt32Array()
+var squad_formations = PackedInt32Array()
 
 func unit_count() -> int:
 	return unit_ids.size()
