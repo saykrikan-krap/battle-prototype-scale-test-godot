@@ -6,6 +6,11 @@ enum Side {
 	BLUE = 1,
 }
 
+enum Facing {
+	LEFT = 0,
+	RIGHT = 1,
+}
+
 enum UnitType {
 	INFANTRY = 0,
 	HEAVY_INFANTRY = 1,
@@ -39,6 +44,7 @@ static var WAIT_COST = PackedInt32Array([1, 1, 1, 1, 1, 1, 1])
 static var MELEE_HIT_CHANCE = PackedInt32Array([50, 55, 60, 0, 50, 55, 0])
 static var RANGED_RANGE = PackedInt32Array([0, 0, 0, 5, 0, 0, 6])
 static var PROJECTILE_SPEED = PackedInt32Array([2, 3])
+static var DEFAULT_FACING = PackedInt32Array([Facing.RIGHT, Facing.LEFT])
 
 const NEIGHBOR_DIRS = [
 	Vector2i(0, -1),
