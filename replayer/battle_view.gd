@@ -11,6 +11,8 @@ const ZOOM_STEP = 0.15
 const PAN_SPEED = 700.0
 const UNIT_SCALE = 0.42
 const PROJECTILE_SCALE = 0.2
+const OVERLAY_RED = Color(0.85, 0.2, 0.2, 0.18)
+const OVERLAY_BLUE = Color(0.2, 0.45, 0.9, 0.18)
 
 const UNIT_TEXTURE_PATHS = [
 	"res://assets/sprites/units/infantry.png",
@@ -47,6 +49,7 @@ var _projectile_texture: Texture2D
 var _unit_meshes = []
 var _projectile_meshes = []
 var _zoom: float = VIEW_SCALE
+var _tile_side = PackedInt32Array()
 
 func _ready() -> void:
 	_zoom = VIEW_SCALE
@@ -99,6 +102,16 @@ func _draw() -> void:
 	var total_height = grid_height * TILE_SIZE
 	draw_rect(Rect2(0, 0, total_width, total_height), Color(0.08, 0.09, 0.12))
 
+	if _tile_side.size() == grid_width * grid_height:
+		for y in range(grid_height):
+			for x in range(grid_width):
+				var tile = x + y * grid_width
+				var side = _tile_side[tile]
+				if side == BattleConstants.Side.RED:
+					draw_rect(Rect2(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE), OVERLAY_RED)
+				elif side == BattleConstants.Side.BLUE:
+					draw_rect(Rect2(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE), OVERLAY_BLUE)
+
 	var line_color = Color(0.18, 0.2, 0.25)
 	for x in range(grid_width + 1):
 		var px = x * TILE_SIZE
@@ -114,6 +127,7 @@ func render(replayer) -> void:
 	if replayer.unit_alive.size() == 0:
 		return
 
+	_update_tile_overlay(replayer)
 	_update_unit_meshes(replayer)
 	_update_projectile_meshes(replayer)
 
@@ -275,6 +289,20 @@ func _update_projectile_meshes(replayer) -> void:
 		else:
 			_projectile_meshes[1].multimesh.set_instance_transform_2d(fireball_index, transform)
 			fireball_index += 1
+
+func _update_tile_overlay(replayer) -> void:
+	var tile_count = grid_width * grid_height
+	if _tile_side.size() != tile_count:
+		_tile_side.resize(tile_count)
+	for i in range(tile_count):
+		_tile_side[i] = -1
+	var unit_count = replayer.unit_alive.size()
+	for id in range(unit_count):
+		if replayer.unit_alive[id] == 0:
+			continue
+		var tile = replayer.unit_x[id] + replayer.unit_y[id] * grid_width
+		_tile_side[tile] = replayer.unit_side[id]
+	queue_redraw()
 
 func _tile_center(x: int, y: int) -> Vector2:
 	return Vector2((float(x) + 0.5) * TILE_SIZE, (float(y) + 0.5) * TILE_SIZE)
