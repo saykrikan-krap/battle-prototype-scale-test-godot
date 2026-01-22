@@ -169,9 +169,10 @@ static func _place_squads(
 		push_error("Insufficient squad blocks for placement.")
 		return
 
-	for i in range(input.unit_x.size()):
-		input.unit_x[i] = -1
-		input.unit_y[i] = -1
+	for squad in squads:
+		for unit_id in squad["units"]:
+			input.unit_x[unit_id] = -1
+			input.unit_y[unit_id] = -1
 
 	var block_origins = []
 	for row in range(blocks_y):
