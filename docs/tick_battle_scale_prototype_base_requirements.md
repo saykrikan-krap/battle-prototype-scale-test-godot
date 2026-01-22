@@ -259,6 +259,13 @@ Same as infantry logic, but using their move/attack costs.
 
 ---
 
+## Battle End Conditions
+
+- Battle ends when a side has zero units, the time limit is reached, or stall detection triggers a draw.
+- If the battle would end while projectiles are in flight, continue advancing ticks until all projectiles resolve. Units do not act during this cleanup phase.
+
+---
+
 ## Movement & Pathing (Scale-Friendly Requirement)
 
 The original small-scale prototype could do BFS per unit. At 2000 units, that can become a bottleneck.
