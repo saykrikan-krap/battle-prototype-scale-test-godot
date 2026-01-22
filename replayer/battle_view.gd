@@ -5,6 +5,10 @@ const BattleConstants = preload("res://schema/constants.gd")
 
 const TILE_SIZE = 24.0
 const VIEW_SCALE = 2.0
+const MIN_ZOOM = 0.6
+const MAX_ZOOM = 4.0
+const ZOOM_STEP = 0.15
+const PAN_SPEED = 700.0
 const UNIT_SCALE = 0.42
 const PROJECTILE_SCALE = 0.2
 
@@ -42,9 +46,43 @@ var _unit_textures = []
 var _projectile_texture: Texture2D
 var _unit_meshes = []
 var _projectile_meshes = []
+var _zoom: float = VIEW_SCALE
 
 func _ready() -> void:
-	scale = Vector2(VIEW_SCALE, VIEW_SCALE)
+	_zoom = VIEW_SCALE
+	scale = Vector2(_zoom, _zoom)
+
+func _input(event) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_apply_zoom(_zoom + ZOOM_STEP, event.position)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_apply_zoom(_zoom - ZOOM_STEP, event.position)
+
+func _process(delta: float) -> void:
+	var direction = Vector2.ZERO
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		direction.y -= 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		direction.y += 1.0
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		direction.x -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		direction.x += 1.0
+	if direction != Vector2.ZERO:
+		var pan_scale = 1.0
+		if _zoom < 1.0:
+			pan_scale = 1.0 / _zoom
+		position -= direction.normalized() * (PAN_SPEED * delta * pan_scale)
+
+func _apply_zoom(target_zoom: float, mouse_pos: Vector2) -> void:
+	var clamped = clamp(target_zoom, MIN_ZOOM, MAX_ZOOM)
+	if is_equal_approx(clamped, _zoom):
+		return
+	var local = (mouse_pos - position) / _zoom
+	_zoom = clamped
+	scale = Vector2(_zoom, _zoom)
+	position = mouse_pos - local * _zoom
 
 func setup(width: int, height: int) -> void:
 	if width == grid_width and height == grid_height and _unit_meshes.size() > 0:

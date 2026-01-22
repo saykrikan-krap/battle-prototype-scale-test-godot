@@ -4,12 +4,12 @@ extends Object
 const BattleConstants = preload("res://schema/constants.gd")
 const BattleInput = preload("res://schema/battle_input.gd")
 
-const GRID_WIDTH = 42
-const GRID_HEIGHT = 20
+const GRID_WIDTH = 100
+const GRID_HEIGHT = 40
 const DEPLOY_WIDTH = 15
 const DEPLOY_HEIGHT = 20
 const RED_ZONE_START = 0
-const BLUE_ZONE_START = 27
+const BLUE_ZONE_START = GRID_WIDTH - DEPLOY_WIDTH
 
 const MAX_UNITS_PER_TILE = 4
 const MAX_TOTAL_SIZE_PER_TILE = 10
@@ -95,10 +95,12 @@ static func _order_columns(columns: Array, front_is_high: bool) -> Array:
 
 static func _positions_from_columns(columns: Array, slots_per_tile: int) -> Array:
 	var positions = []
+	var y_offset = int((GRID_HEIGHT - DEPLOY_HEIGHT) / 2)
 	for x in columns:
 		for y in range(DEPLOY_HEIGHT):
+			var y_pos = y + y_offset
 			for slot in range(slots_per_tile):
-				positions.append(Vector2i(x, y))
+				positions.append(Vector2i(x, y_pos))
 	return positions
 
 static func _add_units(
