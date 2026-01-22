@@ -19,6 +19,7 @@ var _last_result
 var _last_event_log
 var _current_tps: int = DEFAULT_TPS
 var _allow_play_toggle: bool = false
+var _resume_playing_after_modal: bool = false
 
 func _ready() -> void:
 	var args = OS.get_cmdline_args()
@@ -35,6 +36,7 @@ func _ready() -> void:
 	_battle_ui.play_toggled.connect(_on_play_toggled)
 	_battle_ui.step_requested.connect(_on_step_requested)
 	_battle_ui.speed_changed.connect(_on_speed_changed)
+	_battle_ui.unit_details_closed.connect(_on_unit_details_closed)
 
 	var input = ScaleTestV1.build()
 	_show_preview(input)
@@ -89,8 +91,20 @@ func _on_resolve_complete(result: Dictionary) -> void:
 
 func _input(event) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
+		if _battle_ui != null and _battle_ui.is_unit_details_visible():
+			return
 		if event.keycode == KEY_SPACE and _allow_play_toggle:
 			_on_play_toggled(not _replayer.playing)
+
+func _unhandled_input(event) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if _resolving or _battle_view == null or _battle_ui == null or _replayer == null:
+			return
+		var tile = _battle_view.get_hovered_tile()
+		if tile.x < 0:
+			return
+		var units = _collect_units_on_tile(tile)
+		_open_unit_details(tile, units)
 
 func _on_play_toggled(playing: bool) -> void:
 	if _replayer == null:
@@ -106,6 +120,22 @@ func _on_speed_changed(tps: int) -> void:
 	_current_tps = tps
 	if _replayer != null:
 		_replayer.set_ticks_per_second(tps)
+
+func _open_unit_details(tile: Vector2i, units: Array) -> void:
+	if _battle_ui == null:
+		return
+	_resume_playing_after_modal = false
+	if _allow_play_toggle and _replayer != null and _replayer.playing:
+		_resume_playing_after_modal = true
+		_replayer.set_playing(false)
+		_battle_ui.set_playing(false)
+	_battle_ui.show_unit_details(tile, units)
+
+func _on_unit_details_closed() -> void:
+	if _resume_playing_after_modal and _replayer != null:
+		_replayer.set_playing(true)
+		_battle_ui.set_playing(true)
+	_resume_playing_after_modal = false
 
 func _update_debug_overlay() -> void:
 	if _battle_ui == null:
@@ -159,6 +189,27 @@ func _update_hover_panel() -> void:
 			if _replayer.unit_x[id] == tile.x and _replayer.unit_y[id] == tile.y:
 				unit_types.append(_replayer.unit_type[id])
 	_battle_ui.set_hovered_units(tile, unit_types)
+
+func _collect_units_on_tile(tile: Vector2i) -> Array:
+	var units = []
+	if _replayer == null:
+		return units
+	var unit_count = _replayer.unit_alive.size()
+	for id in range(unit_count):
+		if _replayer.unit_alive[id] == 0:
+			continue
+		if _replayer.unit_x[id] == tile.x and _replayer.unit_y[id] == tile.y:
+			var u_type = _replayer.unit_type[id]
+			units.append({
+				"unit_id": id,
+				"unit_type": u_type,
+				"side": _replayer.unit_side[id],
+				"size": BattleConstants.UNIT_SIZE[u_type],
+				"move_cost": BattleConstants.MOVE_COST[u_type],
+				"attack_cost": BattleConstants.ATTACK_COST[u_type],
+				"range": BattleConstants.RANGED_RANGE[u_type],
+			})
+	return units
 
 func _show_preview(input) -> void:
 	var log = EventLog.new()
