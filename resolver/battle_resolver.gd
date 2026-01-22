@@ -120,9 +120,7 @@ static func resolve(input) -> Dictionary:
 				0
 			)
 			var shooter_id = projectile_shooter_id[pid]
-			var shooter_side = side[shooter_id]
-			var enemy_side = BattleConstants.enemy_side(shooter_side)
-			if tile_side[target_tile] == enemy_side:
+			if tile_side[target_tile] != -1:
 				if p_type == BattleConstants.ProjectileType.ARROW:
 					var target_id = _pick_random_unit(tile_units[target_tile], rng)
 					if target_id != -1:
@@ -151,7 +149,7 @@ static func resolve(input) -> Dictionary:
 					var removed_any = false
 					var targets = tile_units[target_tile].duplicate()
 					for target_id in targets:
-						if side[target_id] == enemy_side and alive[target_id] == 1:
+						if alive[target_id] == 1:
 							_remove_unit(
 								target_id,
 								tick,

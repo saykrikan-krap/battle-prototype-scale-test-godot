@@ -259,6 +259,14 @@ Same as infantry logic, but using their move/attack costs.
 
 ---
 
+## Projectile Resolution
+
+- Projectiles can hit any units on the target tile at impact (friendly fire enabled).
+- Arrow impact removes one random unit on the tile (if any).
+- Fireball impact removes all units on the tile (if any).
+
+---
+
 ## Battle End Conditions
 
 - Battle ends when a side has zero units, the time limit is reached, or stall detection triggers a draw.
