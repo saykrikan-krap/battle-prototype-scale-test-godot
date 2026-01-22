@@ -4,7 +4,7 @@ extends Object
 const BattleConstants = preload("res://schema/constants.gd")
 const BattleInput = preload("res://schema/battle_input.gd")
 
-const GRID_WIDTH = 100
+const GRID_WIDTH = 80
 const GRID_HEIGHT = 40
 const DEPLOY_WIDTH = 15
 const DEPLOY_HEIGHT = 20
