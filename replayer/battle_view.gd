@@ -70,7 +70,10 @@ func _process(delta: float) -> void:
 	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 		direction.x += 1.0
 	if direction != Vector2.ZERO:
-		position -= direction.normalized() * (PAN_SPEED * delta / _zoom)
+		var pan_scale = 1.0
+		if _zoom < 1.0:
+			pan_scale = 1.0 / _zoom
+		position -= direction.normalized() * (PAN_SPEED * delta * pan_scale)
 
 func _apply_zoom(target_zoom: float, mouse_pos: Vector2) -> void:
 	var clamped = clamp(target_zoom, MIN_ZOOM, MAX_ZOOM)
