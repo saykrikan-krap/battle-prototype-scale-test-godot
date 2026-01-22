@@ -1,0 +1,8 @@
+; Engine configuration file.
+; It's best to edit using the editor, not manually.
+; Format: https://docs.godotengine.org/en/stable/about/file_formats/project_settings.html
+config_version=5
+
+[application]
+config/name="Battle Replay Scale Test"
+run/main_scene="res://scenes/Main.tscn"
