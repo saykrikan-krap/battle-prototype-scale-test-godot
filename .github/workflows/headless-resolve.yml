@@ -23,4 +23,6 @@ jobs:
           mv /tmp/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 tools/godot/${GODOT_VERSION}/linux/
           chmod +x tools/godot/${GODOT_VERSION}/linux/Godot_v${GODOT_VERSION}-stable_linux.x86_64
       - name: Run headless resolve
-        run: ./run.sh --headless --resolve-only
+        run: |
+          chmod +x ./run.sh
+          ./run.sh --headless --resolve-only
