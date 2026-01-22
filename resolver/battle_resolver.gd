@@ -93,12 +93,18 @@ static func resolve(input) -> Dictionary:
 
 	var ticks_elapsed = 0
 	var stall_ticks = 0
+	var in_flight_projectiles = 0
+	var post_battle = false
+	var max_tick = input.time_limit_ticks
+	var tick = 0
 
-	for tick in range(input.time_limit_ticks + 1):
+	while tick <= max_tick:
 		ticks_elapsed = tick
 		var activity = false
 
-		var impacts = projectiles_by_tick[tick]
+		var impacts = []
+		if tick < projectiles_by_tick.size():
+			impacts = projectiles_by_tick[tick]
 		if impacts.size() > 0:
 			activity = true
 		for pid in impacts:
@@ -169,9 +175,18 @@ static func resolve(input) -> Dictionary:
 							removed_any = true
 					if removed_any:
 						activity = true
+			in_flight_projectiles -= 1
+			if in_flight_projectiles < 0:
+				in_flight_projectiles = 0
 
 		if units_remaining[BattleConstants.Side.RED] == 0 or units_remaining[BattleConstants.Side.BLUE] == 0:
-			break
+			post_battle = true
+
+		if post_battle:
+			if in_flight_projectiles <= 0:
+				break
+			tick += 1
+			continue
 
 		var dist_red_size2 = _compute_distance_field(
 			width,
@@ -300,6 +315,11 @@ static func resolve(input) -> Dictionary:
 						projectile_shooter_id,
 						projectile_impact_tick
 					)
+					var impact_tick = projectile_impact_tick[pid]
+					if impact_tick >= 0:
+						in_flight_projectiles += 1
+						if impact_tick > max_tick:
+							max_tick = impact_tick
 					event_log.add_event(
 						tick,
 						id,
@@ -335,6 +355,11 @@ static func resolve(input) -> Dictionary:
 						projectile_shooter_id,
 						projectile_impact_tick
 					)
+					var impact_tick2 = projectile_impact_tick[pid2]
+					if impact_tick2 >= 0:
+						in_flight_projectiles += 1
+						if impact_tick2 > max_tick:
+							max_tick = impact_tick2
 					event_log.add_event(
 						tick,
 						id,
@@ -391,14 +416,29 @@ static func resolve(input) -> Dictionary:
 					next_tick[id] = tick + BattleConstants.WAIT_COST[u_type]
 
 		if units_remaining[BattleConstants.Side.RED] == 0 or units_remaining[BattleConstants.Side.BLUE] == 0:
-			break
+			post_battle = true
+
+		if tick >= input.time_limit_ticks:
+			post_battle = true
+
+		if post_battle:
+			if in_flight_projectiles <= 0:
+				break
+			tick += 1
+			continue
 
 		if activity:
 			stall_ticks = 0
 		else:
 			stall_ticks += 1
 			if STALL_TICK_LIMIT > 0 and stall_ticks >= STALL_TICK_LIMIT:
-				break
+				post_battle = true
+				if in_flight_projectiles <= 0:
+					break
+				tick += 1
+				continue
+
+		tick += 1
 
 	var winner = -1
 	if units_remaining[BattleConstants.Side.RED] == 0 and units_remaining[BattleConstants.Side.BLUE] == 0:
@@ -722,7 +762,12 @@ static func _schedule_projectile(
 	projectile_target_tile.append(target_tile)
 	projectile_shooter_id.append(shooter_id)
 	projectile_impact_tick.append(impact_tick)
-	if impact_tick >= 0 and impact_tick < projectiles_by_tick.size():
+	if impact_tick >= 0:
+		if impact_tick >= projectiles_by_tick.size():
+			var old_size = projectiles_by_tick.size()
+			projectiles_by_tick.resize(impact_tick + 1)
+			for i in range(old_size, projectiles_by_tick.size()):
+				projectiles_by_tick[i] = []
 		projectiles_by_tick[impact_tick].append(pid)
 	return impact_tick
 
