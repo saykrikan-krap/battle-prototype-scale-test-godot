@@ -18,13 +18,7 @@ const TIME_LIMIT_TICKS = 5000
 const DEFAULT_SEED = 12345
 
 static func build(seed: int = DEFAULT_SEED):
-	var input = BattleInput.new()
-	input.grid_width = GRID_WIDTH
-	input.grid_height = GRID_HEIGHT
-	input.max_units_per_tile = MAX_UNITS_PER_TILE
-	input.max_total_size_per_tile = MAX_TOTAL_SIZE_PER_TILE
-	input.seed = seed
-	input.time_limit_ticks = TIME_LIMIT_TICKS
+	var input = _build_base_input(seed)
 
 	var next_unit_id = 0
 	var next_squad_id = 0
@@ -32,6 +26,19 @@ static func build(seed: int = DEFAULT_SEED):
 	next_unit_id = result.next_unit_id
 	next_squad_id = result.next_squad_id
 	result = _populate_side(input, BattleConstants.Side.BLUE, BLUE_ZONE_START, next_unit_id, next_squad_id)
+	return input
+
+static func build_empty(seed: int = DEFAULT_SEED):
+	return _build_base_input(seed)
+
+static func _build_base_input(seed: int) -> BattleInput:
+	var input = BattleInput.new()
+	input.grid_width = GRID_WIDTH
+	input.grid_height = GRID_HEIGHT
+	input.max_units_per_tile = MAX_UNITS_PER_TILE
+	input.max_total_size_per_tile = MAX_TOTAL_SIZE_PER_TILE
+	input.seed = seed
+	input.time_limit_ticks = TIME_LIMIT_TICKS
 	return input
 
 static func _populate_side(input, side: int, zone_start: int, next_unit_id: int, next_squad_id: int) -> Dictionary:

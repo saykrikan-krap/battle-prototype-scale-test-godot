@@ -13,6 +13,8 @@ const UNIT_SCALE = 0.42
 const PROJECTILE_SCALE = 0.2
 const OVERLAY_RED = Color(0.85, 0.2, 0.2, 0.18)
 const OVERLAY_BLUE = Color(0.2, 0.45, 0.9, 0.18)
+const GHOST_ALPHA = 0.35
+const GHOST_INVALID_ALPHA = 0.55
 
 const UNIT_TEXTURE_PATHS = [
 	"res://assets/sprites/units/infantry.png",
@@ -55,6 +57,9 @@ var _unit_textures = []
 var _projectile_texture: Texture2D
 var _unit_meshes = []
 var _projectile_meshes = []
+var _ghost_meshes = []
+var _ghost_units = []
+var _ghost_valid: bool = true
 var _zoom: float = VIEW_SCALE
 var _tile_side = PackedInt32Array()
 var _hovered_tile = Vector2i(-1, -1)
@@ -105,6 +110,11 @@ func _update_hovered_tile() -> void:
 
 func get_hovered_tile() -> Vector2i:
 	return _hovered_tile
+
+func set_ghost_units(units: Array, valid: bool) -> void:
+	_ghost_units = units
+	_ghost_valid = valid
+	_update_ghost_meshes()
 
 func _apply_zoom(target_zoom: float, mouse_pos: Vector2) -> void:
 	var clamped = clamp(target_zoom, MIN_ZOOM, MAX_ZOOM)
@@ -179,6 +189,13 @@ func _ensure_meshes() -> void:
 		for texture in _unit_textures:
 			var instance = _make_multimesh_instance(texture, Color.WHITE)
 			_unit_meshes.append(instance)
+			add_child(instance)
+
+	if _ghost_meshes.size() == 0:
+		for texture in _unit_textures:
+			var instance = _make_multimesh_instance(texture, Color.WHITE)
+			instance.z_index = 2
+			_ghost_meshes.append(instance)
 			add_child(instance)
 
 	if _projectile_meshes.size() == 0:
@@ -280,6 +297,53 @@ func _update_unit_meshes(replayer) -> void:
 		transform.origin = draw_pos - half_unit
 		_unit_meshes[t].multimesh.set_instance_transform_2d(idx, transform)
 		_unit_meshes[t].multimesh.set_instance_color(idx, color)
+
+func _update_ghost_meshes() -> void:
+	_ensure_meshes()
+	var type_counts = PackedInt32Array()
+	type_counts.resize(_ghost_meshes.size())
+	for i in range(_ghost_meshes.size()):
+		type_counts[i] = 0
+
+	for entry in _ghost_units:
+		var unit_type = int(entry["type"])
+		if unit_type >= 0 and unit_type < type_counts.size():
+			type_counts[unit_type] += 1
+
+	for t in range(_ghost_meshes.size()):
+		_ghost_meshes[t].multimesh.instance_count = type_counts[t]
+
+	var type_offsets = PackedInt32Array()
+	type_offsets.resize(_ghost_meshes.size())
+	for t in range(_ghost_meshes.size()):
+		type_offsets[t] = 0
+
+	var unit_pixel_size = TILE_SIZE * UNIT_SCALE
+	var half_unit = Vector2(unit_pixel_size * 0.5, unit_pixel_size * 0.5)
+	var tint = Color(1, 1, 1, GHOST_ALPHA)
+	if not _ghost_valid:
+		tint = Color(1.0, 0.2, 0.2, GHOST_INVALID_ALPHA)
+
+	for entry in _ghost_units:
+		var unit_type = int(entry["type"])
+		if unit_type < 0 or unit_type >= _ghost_meshes.size():
+			continue
+		var ux = int(entry["x"])
+		var uy = int(entry["y"])
+		var slot = int(entry["slot"])
+		var side = int(entry["side"])
+		var facing = BattleConstants.DEFAULT_FACING[side]
+		var offset = _slot_offset(slot, facing)
+		var draw_pos = _tile_center(ux, uy) + offset
+
+		var idx = type_offsets[unit_type]
+		type_offsets[unit_type] = idx + 1
+
+		var transform = Transform2D.IDENTITY
+		transform = transform.scaled(Vector2(unit_pixel_size, unit_pixel_size))
+		transform.origin = draw_pos - half_unit
+		_ghost_meshes[unit_type].multimesh.set_instance_transform_2d(idx, transform)
+		_ghost_meshes[unit_type].multimesh.set_instance_color(idx, tint)
 
 func _update_projectile_meshes(replayer) -> void:
 	var count = replayer.projectile_ids.size()
