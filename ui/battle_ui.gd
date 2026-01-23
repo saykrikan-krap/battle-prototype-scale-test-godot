@@ -6,6 +6,9 @@ signal play_toggled(playing: bool)
 signal step_requested
 signal speed_changed(ticks_per_second: int)
 signal unit_details_closed
+signal placement_side_changed(side: int)
+signal placement_unit_selected(unit_type: int)
+signal placement_canceled
 
 var _resolve_button: Button
 var _play_button: Button
@@ -21,6 +24,13 @@ var _hover_panel: PanelContainer
 var _hover_title: Label
 var _hover_entries = []
 var _unit_textures = []
+var _unit_icons = []
+var _setup_panel: PanelContainer
+var _side_option: OptionButton
+var _unit_buttons = []
+var _cancel_placement: Button
+var _selected_unit_type: int = -1
+var _custom_setup_enabled: bool = false
 var _details_backdrop: ColorRect
 var _details_panel: PanelContainer
 var _details_title: Label
@@ -157,6 +167,7 @@ func _ready() -> void:
 	overlay_box.add_child(_spinner_label)
 
 	set_start_overlay_visible(true)
+	_build_setup_panel()
 	_build_hover_panel()
 	_build_unit_details_modal()
 
@@ -168,6 +179,7 @@ func set_resolving(resolving: bool) -> void:
 	_start_button.disabled = resolving
 	_status_label.text = "Resolving..." if resolving else ""
 	_spinner_label.visible = resolving
+	_update_setup_visibility()
 	if resolving:
 		_spinner_index = 0
 		_spinner_elapsed = 0.0
@@ -180,6 +192,20 @@ func set_playing(playing: bool) -> void:
 func set_start_overlay_visible(visible: bool) -> void:
 	_start_overlay.visible = visible
 	_panel.visible = not visible
+	_update_setup_visibility()
+
+func set_custom_setup_enabled(enabled: bool) -> void:
+	_custom_setup_enabled = enabled
+	_set_custom_controls_enabled(enabled)
+	_update_setup_visibility()
+
+func _update_setup_visibility() -> void:
+	if _setup_panel == null:
+		return
+	if _start_overlay == null:
+		_setup_panel.visible = false
+		return
+	_setup_panel.visible = _custom_setup_enabled and _start_overlay.visible and not _resolving
 
 func set_debug_text(text: String) -> void:
 	_debug_label.text = text
@@ -230,6 +256,45 @@ func _on_step_pressed() -> void:
 func _on_speed_selected(index: int) -> void:
 	var tps = _speed_option.get_item_id(index)
 	emit_signal("speed_changed", tps)
+
+func clear_placement_selection() -> void:
+	if _selected_unit_type == -1:
+		return
+	_selected_unit_type = -1
+	_update_unit_button_states()
+	emit_signal("placement_canceled")
+
+func _set_custom_controls_enabled(enabled: bool) -> void:
+	if _side_option != null:
+		_side_option.disabled = not enabled
+	if _cancel_placement != null:
+		_cancel_placement.disabled = not enabled
+	for entry in _unit_buttons:
+		entry["button"].disabled = not enabled
+	if not enabled:
+		_selected_unit_type = -1
+		_update_unit_button_states()
+
+func _update_unit_button_states() -> void:
+	for entry in _unit_buttons:
+		var button: Button = entry["button"]
+		var unit_type = int(entry["type"])
+		button.button_pressed = unit_type == _selected_unit_type
+
+func _on_side_selected(index: int) -> void:
+	var side = _side_option.get_item_id(index)
+	emit_signal("placement_side_changed", side)
+
+func _on_unit_button_pressed(unit_type: int) -> void:
+	if _selected_unit_type == unit_type:
+		clear_placement_selection()
+		return
+	_selected_unit_type = unit_type
+	_update_unit_button_states()
+	emit_signal("placement_unit_selected", unit_type)
+
+func _on_cancel_pressed() -> void:
+	clear_placement_selection()
 
 func _process(delta: float) -> void:
 	if not _resolving:
@@ -287,6 +352,62 @@ func _build_hover_panel() -> void:
 			"icon": icon,
 			"label": label,
 		})
+
+func _build_setup_panel() -> void:
+	_setup_panel = PanelContainer.new()
+	_setup_panel.position = Vector2(10, 220)
+	add_child(_setup_panel)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	_setup_panel.add_child(vbox)
+
+	var title = Label.new()
+	title.text = "Custom Setup"
+	vbox.add_child(title)
+
+	var side_label = Label.new()
+	side_label.text = "Placing side"
+	vbox.add_child(side_label)
+
+	_side_option = OptionButton.new()
+	_side_option.add_item("Red Army", 0)
+	_side_option.add_item("Blue Army", 1)
+	_side_option.select(0)
+	_side_option.item_selected.connect(_on_side_selected)
+	vbox.add_child(_side_option)
+
+	var unit_label = Label.new()
+	unit_label.text = "Place squad"
+	vbox.add_child(unit_label)
+
+	_ensure_unit_textures()
+	var grid = GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+	vbox.add_child(grid)
+
+	for i in range(UNIT_NAMES.size()):
+		var button = Button.new()
+		button.text = UNIT_NAMES[i]
+		if i < _unit_icons.size():
+			button.icon = _unit_icons[i]
+			button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.toggle_mode = true
+		button.pressed.connect(Callable(self, "_on_unit_button_pressed").bind(i))
+		grid.add_child(button)
+		_unit_buttons.append({
+			"type": i,
+			"button": button,
+		})
+
+	_cancel_placement = Button.new()
+	_cancel_placement.text = "Cancel placement"
+	_cancel_placement.pressed.connect(_on_cancel_pressed)
+	vbox.add_child(_cancel_placement)
+
+	_set_custom_controls_enabled(false)
 
 func _build_unit_details_modal() -> void:
 	_details_backdrop = ColorRect.new()
@@ -444,8 +565,18 @@ func _ensure_unit_textures() -> void:
 	if _unit_textures.size() > 0:
 		return
 	_unit_textures.resize(UNIT_TEXTURE_PATHS.size())
+	_unit_icons.resize(UNIT_TEXTURE_PATHS.size())
 	for i in range(UNIT_TEXTURE_PATHS.size()):
-		_unit_textures[i] = _load_texture(UNIT_TEXTURE_PATHS[i])
+		var texture = _load_texture(UNIT_TEXTURE_PATHS[i])
+		_unit_textures[i] = texture
+		var icon_texture = texture
+		if texture != null:
+			var image = texture.get_image()
+			if image != null:
+				var icon_image = image.duplicate()
+				icon_image.resize(18, 18, Image.INTERPOLATE_NEAREST)
+				icon_texture = ImageTexture.create_from_image(icon_image)
+		_unit_icons[i] = icon_texture
 
 func _load_texture(path: String) -> Texture2D:
 	var image = Image.new()

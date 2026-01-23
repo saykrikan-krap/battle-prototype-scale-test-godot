@@ -13,6 +13,10 @@ const UNIT_SCALE = 0.42
 const PROJECTILE_SCALE = 0.2
 const OVERLAY_RED = Color(0.85, 0.2, 0.2, 0.18)
 const OVERLAY_BLUE = Color(0.2, 0.45, 0.9, 0.18)
+const DEPLOY_RED = Color(0.9, 0.25, 0.25, 0.1)
+const DEPLOY_BLUE = Color(0.25, 0.5, 0.95, 0.1)
+const GHOST_ALPHA = 0.35
+const GHOST_INVALID_ALPHA = 0.55
 
 const UNIT_TEXTURE_PATHS = [
 	"res://assets/sprites/units/infantry.png",
@@ -55,6 +59,12 @@ var _unit_textures = []
 var _projectile_texture: Texture2D
 var _unit_meshes = []
 var _projectile_meshes = []
+var _ghost_meshes = []
+var _ghost_units = []
+var _ghost_valid: bool = true
+var _deploy_red_rect: Rect2i = Rect2i()
+var _deploy_blue_rect: Rect2i = Rect2i()
+var _show_deploy_zones: bool = false
 var _zoom: float = VIEW_SCALE
 var _tile_side = PackedInt32Array()
 var _hovered_tile = Vector2i(-1, -1)
@@ -106,6 +116,17 @@ func _update_hovered_tile() -> void:
 func get_hovered_tile() -> Vector2i:
 	return _hovered_tile
 
+func set_ghost_units(units: Array, valid: bool) -> void:
+	_ghost_units = units
+	_ghost_valid = valid
+	_update_ghost_meshes()
+
+func set_deployment_zones(red_rect: Rect2i, blue_rect: Rect2i, visible: bool) -> void:
+	_deploy_red_rect = red_rect
+	_deploy_blue_rect = blue_rect
+	_show_deploy_zones = visible
+	queue_redraw()
+
 func _apply_zoom(target_zoom: float, mouse_pos: Vector2) -> void:
 	var clamped = clamp(target_zoom, MIN_ZOOM, MAX_ZOOM)
 	if is_equal_approx(clamped, _zoom):
@@ -129,6 +150,10 @@ func _draw() -> void:
 	var total_width = grid_width * TILE_SIZE
 	var total_height = grid_height * TILE_SIZE
 	draw_rect(Rect2(0, 0, total_width, total_height), Color(0.08, 0.09, 0.12))
+
+	if _show_deploy_zones:
+		_draw_deploy_zone(_deploy_red_rect, DEPLOY_RED)
+		_draw_deploy_zone(_deploy_blue_rect, DEPLOY_BLUE)
 
 	if _tile_side.size() == grid_width * grid_height:
 		for y in range(grid_height):
@@ -155,11 +180,27 @@ func _draw() -> void:
 			2.0
 		)
 
+func _draw_deploy_zone(zone: Rect2i, color: Color) -> void:
+	if zone.size.x <= 0 or zone.size.y <= 0:
+		return
+	draw_rect(
+		Rect2(
+			zone.position.x * TILE_SIZE,
+			zone.position.y * TILE_SIZE,
+			zone.size.x * TILE_SIZE,
+			zone.size.y * TILE_SIZE
+		),
+		color
+	)
+
 func render(replayer) -> void:
 	if replayer == null:
 		return
 	setup(replayer.grid_width, replayer.grid_height)
 	if replayer.unit_alive.size() == 0:
+		_clear_unit_meshes()
+		_clear_projectile_meshes()
+		_clear_tile_overlay()
 		return
 
 	_update_tile_overlay(replayer)
@@ -179,6 +220,13 @@ func _ensure_meshes() -> void:
 		for texture in _unit_textures:
 			var instance = _make_multimesh_instance(texture, Color.WHITE)
 			_unit_meshes.append(instance)
+			add_child(instance)
+
+	if _ghost_meshes.size() == 0:
+		for texture in _unit_textures:
+			var instance = _make_multimesh_instance(texture, Color.WHITE)
+			instance.z_index = 2
+			_ghost_meshes.append(instance)
 			add_child(instance)
 
 	if _projectile_meshes.size() == 0:
@@ -216,6 +264,26 @@ func _make_multimesh_instance(texture: Texture2D, color: Color) -> MultiMeshInst
 	instance.texture = texture
 	instance.modulate = color
 	return instance
+
+func _clear_unit_meshes() -> void:
+	_ensure_meshes()
+	for mesh in _unit_meshes:
+		mesh.multimesh.instance_count = 0
+
+func _clear_projectile_meshes() -> void:
+	_ensure_meshes()
+	for mesh in _projectile_meshes:
+		mesh.multimesh.instance_count = 0
+
+func _clear_tile_overlay() -> void:
+	if grid_width <= 0 or grid_height <= 0:
+		return
+	var tile_count = grid_width * grid_height
+	if _tile_side.size() != tile_count:
+		_tile_side.resize(tile_count)
+	for i in range(tile_count):
+		_tile_side[i] = -1
+	queue_redraw()
 
 func _update_unit_meshes(replayer) -> void:
 	var unit_count = replayer.unit_alive.size()
@@ -280,6 +348,53 @@ func _update_unit_meshes(replayer) -> void:
 		transform.origin = draw_pos - half_unit
 		_unit_meshes[t].multimesh.set_instance_transform_2d(idx, transform)
 		_unit_meshes[t].multimesh.set_instance_color(idx, color)
+
+func _update_ghost_meshes() -> void:
+	_ensure_meshes()
+	var type_counts = PackedInt32Array()
+	type_counts.resize(_ghost_meshes.size())
+	for i in range(_ghost_meshes.size()):
+		type_counts[i] = 0
+
+	for entry in _ghost_units:
+		var unit_type = int(entry["type"])
+		if unit_type >= 0 and unit_type < type_counts.size():
+			type_counts[unit_type] += 1
+
+	for t in range(_ghost_meshes.size()):
+		_ghost_meshes[t].multimesh.instance_count = type_counts[t]
+
+	var type_offsets = PackedInt32Array()
+	type_offsets.resize(_ghost_meshes.size())
+	for t in range(_ghost_meshes.size()):
+		type_offsets[t] = 0
+
+	var unit_pixel_size = TILE_SIZE * UNIT_SCALE
+	var half_unit = Vector2(unit_pixel_size * 0.5, unit_pixel_size * 0.5)
+	var tint = Color(1, 1, 1, GHOST_ALPHA)
+	if not _ghost_valid:
+		tint = Color(1.0, 0.2, 0.2, GHOST_INVALID_ALPHA)
+
+	for entry in _ghost_units:
+		var unit_type = int(entry["type"])
+		if unit_type < 0 or unit_type >= _ghost_meshes.size():
+			continue
+		var ux = int(entry["x"])
+		var uy = int(entry["y"])
+		var slot = int(entry["slot"])
+		var side = int(entry["side"])
+		var facing = BattleConstants.DEFAULT_FACING[side]
+		var offset = _slot_offset(slot, facing)
+		var draw_pos = _tile_center(ux, uy) + offset
+
+		var idx = type_offsets[unit_type]
+		type_offsets[unit_type] = idx + 1
+
+		var transform = Transform2D.IDENTITY
+		transform = transform.scaled(Vector2(unit_pixel_size, unit_pixel_size))
+		transform.origin = draw_pos - half_unit
+		_ghost_meshes[unit_type].multimesh.set_instance_transform_2d(idx, transform)
+		_ghost_meshes[unit_type].multimesh.set_instance_color(idx, tint)
 
 func _update_projectile_meshes(replayer) -> void:
 	var count = replayer.projectile_ids.size()
