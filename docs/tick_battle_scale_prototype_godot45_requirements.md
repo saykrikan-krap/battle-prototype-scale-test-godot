@@ -97,19 +97,18 @@ This is the single biggest lever for scale.
 
 ---
 
-## 7. Pathing Implementation (Distance Field)
+## 7. Pathing & Formation Movement
 
-Implement the base document’s **soft-cost Dijkstra** approach:
+Follow the base document and the **Squad-Aware Pathing & Formations companion guide** (`docs/tick_battle_scale_prototype_squad_pathing_companion.md`).
 
-Per tick (or when you choose to recompute):
-1. Build passability + cost data for size-2 and size-3 movers.
-2. Run a multi-source **Dijkstra** seeded from enemy-occupied tiles.
-   - Empty tile cost = 1
-   - Friendly tile cost = 1 + (friendly unit count × penalty)
-   - Enemy tiles are blocked
-3. Each moving unit picks a neighbor tile with the lowest distance that is passable.
-
-Keep tie-breaking deterministic (fixed neighbor order).
+Required implementation shape:
+- Build multi-source **Dijkstra** distance fields per side + size (terrain + objectives only).
+- Drive a per-squad **anchor** along the field.
+- Per unit, choose moves with **goal slack + formation tie-break** (include `stay`).
+- Apply movement in **two phases** (intent then conflict resolution).
+- Use deterministic tie-breaks for both Dijkstra and move resolution.
+ - Cache fields per `(side, size)` and rebuild on a cadence (dirty + `REBUILD_INTERVAL_TICKS`, or `MAX_STALE_TICKS` safety).
+ - A BFS fast path is allowed when all edge costs are uniform.
 
 ---
 

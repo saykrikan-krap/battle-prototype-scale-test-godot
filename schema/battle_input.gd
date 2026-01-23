@@ -16,6 +16,8 @@ var unit_x = PackedInt32Array()
 var unit_y = PackedInt32Array()
 var unit_next_tick = PackedInt32Array()
 var unit_squad_ids = PackedInt32Array()
+var unit_slot_dx = PackedInt32Array()
+var unit_slot_dy = PackedInt32Array()
 
 var squad_ids = PackedInt32Array()
 var squad_sides = PackedInt32Array()

@@ -4,6 +4,11 @@ extends Object
 const BattleConstants = preload("res://schema/constants.gd")
 const BattleInput = preload("res://schema/battle_input.gd")
 
+const FACING_NORTH = 0
+const FACING_EAST = 1
+const FACING_SOUTH = 2
+const FACING_WEST = 3
+
 const GRID_WIDTH = 80
 const GRID_HEIGHT = 40
 const DEPLOY_WIDTH = 15
@@ -120,6 +125,8 @@ static func _add_squad_type(
 			input.unit_y.append(-1)
 			input.unit_next_tick.append(0)
 			input.unit_squad_ids.append(squad_id)
+			input.unit_slot_dx.append(0)
+			input.unit_slot_dy.append(0)
 			squad_units.append(unit_id)
 
 		squads.append({
@@ -161,6 +168,7 @@ static func _place_squads(
 			"width": formation["width"],
 			"height": formation["height"],
 			"tile_count": tile_units.size(),
+			"anchor_local": _formation_anchor_local(int(formation["height"])),
 		})
 		block_width = max(block_width, int(formation["width"]))
 		block_height = max(block_height, int(formation["height"]))
@@ -193,11 +201,17 @@ static func _place_squads(
 				var x = zone_x_start + col * block_width
 				block_origins.append(Vector2i(x, y))
 
+	var facing = FACING_EAST if front_is_high else FACING_WEST
 	for i in range(prepared.size()):
 		var squad = prepared[i]
 		var block = block_origins[i]
 		var positions: Array = squad["positions"]
 		var tile_units: Array = squad["tile_units"]
+		var anchor_local: Vector2i = squad["anchor_local"]
+		var anchor_x = block.x + anchor_local.x
+		if front_is_high:
+			anchor_x = block.x + (block_width - 1 - anchor_local.x)
+		var anchor_y = block.y + anchor_local.y
 		for j in range(positions.size()):
 			var local = positions[j] as Vector2i
 			var world_x = block.x + local.x
@@ -207,6 +221,10 @@ static func _place_squads(
 			for unit_id in tile_units[j]:
 				input.unit_x[unit_id] = world_x
 				input.unit_y[unit_id] = world_y
+				var offset = Vector2i(world_x - anchor_x, world_y - anchor_y)
+				var canonical = _to_canonical_offset(offset, facing)
+				input.unit_slot_dx[unit_id] = canonical.x
+				input.unit_slot_dy[unit_id] = canonical.y
 
 static func _pack_units_into_tiles(
 		unit_ids: Array,
@@ -260,3 +278,21 @@ static func _square_tile_positions(tile_count: int) -> Dictionary:
 		"height": height,
 		"positions": positions,
 	}
+
+static func _formation_anchor_local(height: int) -> Vector2i:
+	var y = int(floor(float(height - 1) / 2.0))
+	if y < 0:
+		y = 0
+	return Vector2i(0, y)
+
+static func _to_canonical_offset(offset: Vector2i, facing: int) -> Vector2i:
+	match facing:
+		FACING_NORTH:
+			return offset
+		FACING_EAST:
+			return Vector2i(offset.y, -offset.x)
+		FACING_SOUTH:
+			return Vector2i(-offset.x, -offset.y)
+		FACING_WEST:
+			return Vector2i(-offset.y, offset.x)
+	return offset

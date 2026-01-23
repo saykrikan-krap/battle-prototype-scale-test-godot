@@ -17,6 +17,9 @@ const DEPLOY_RED = Color(0.9, 0.25, 0.25, 0.1)
 const DEPLOY_BLUE = Color(0.25, 0.5, 0.95, 0.1)
 const GHOST_ALPHA = 0.35
 const GHOST_INVALID_ALPHA = 0.55
+const DEBUG_ANCHOR_COLOR = Color(0.98, 0.9, 0.3, 0.9)
+const DEBUG_ARROW_COLOR = Color(0.95, 0.95, 0.95, 0.9)
+const DEBUG_TEXT_COLOR = Color(0.95, 0.95, 0.95, 0.9)
 
 const UNIT_TEXTURE_PATHS = [
 	"res://assets/sprites/units/infantry.png",
@@ -68,10 +71,19 @@ var _show_deploy_zones: bool = false
 var _zoom: float = VIEW_SCALE
 var _tile_side = PackedInt32Array()
 var _hovered_tile = Vector2i(-1, -1)
+var _show_squad_debug: bool = false
+var _squad_anchor_x = PackedInt32Array()
+var _squad_anchor_y = PackedInt32Array()
+var _squad_facing = PackedInt32Array()
+var _squad_slack = PackedInt32Array()
+var _squad_choke = PackedInt32Array()
+var _squad_anchor_delay = PackedInt32Array()
+var _debug_font: Font
 
 func _ready() -> void:
 	_zoom = VIEW_SCALE
 	scale = Vector2(_zoom, _zoom)
+	_debug_font = ThemeDB.fallback_font
 
 func _input(event) -> void:
 	if event is InputEventMouseButton and event.pressed:
@@ -127,6 +139,34 @@ func set_deployment_zones(red_rect: Rect2i, blue_rect: Rect2i, visible: bool) ->
 	_show_deploy_zones = visible
 	queue_redraw()
 
+func set_squad_debug_enabled(enabled: bool) -> void:
+	_show_squad_debug = enabled
+	if not enabled:
+		_clear_squad_debug()
+	queue_redraw()
+
+func sync_squad_debug(replayer) -> void:
+	if not _show_squad_debug:
+		return
+	if replayer == null:
+		_clear_squad_debug()
+		return
+	_squad_anchor_x = replayer.squad_anchor_x
+	_squad_anchor_y = replayer.squad_anchor_y
+	_squad_facing = replayer.squad_facing
+	_squad_slack = replayer.squad_slack
+	_squad_choke = replayer.squad_choke
+	_squad_anchor_delay = replayer.squad_anchor_delay
+	queue_redraw()
+
+func _clear_squad_debug() -> void:
+	_squad_anchor_x = PackedInt32Array()
+	_squad_anchor_y = PackedInt32Array()
+	_squad_facing = PackedInt32Array()
+	_squad_slack = PackedInt32Array()
+	_squad_choke = PackedInt32Array()
+	_squad_anchor_delay = PackedInt32Array()
+
 func _apply_zoom(target_zoom: float, mouse_pos: Vector2) -> void:
 	var clamped = clamp(target_zoom, MIN_ZOOM, MAX_ZOOM)
 	if is_equal_approx(clamped, _zoom):
@@ -179,6 +219,8 @@ func _draw() -> void:
 			false,
 			2.0
 		)
+	if _show_squad_debug:
+		_draw_squad_debug()
 
 func _draw_deploy_zone(zone: Rect2i, color: Color) -> void:
 	if zone.size.x <= 0 or zone.size.y <= 0:
@@ -192,6 +234,37 @@ func _draw_deploy_zone(zone: Rect2i, color: Color) -> void:
 		),
 		color
 	)
+
+func _draw_squad_debug() -> void:
+	if _squad_anchor_x.size() == 0:
+		return
+	for i in range(_squad_anchor_x.size()):
+		var ax = _squad_anchor_x[i]
+		var ay = _squad_anchor_y[i]
+		if ax < 0 or ay < 0:
+			continue
+		var origin = Vector2(ax * TILE_SIZE, ay * TILE_SIZE)
+		draw_rect(Rect2(origin.x, origin.y, TILE_SIZE, TILE_SIZE), DEBUG_ANCHOR_COLOR, false, 2.0)
+		var center = origin + Vector2(TILE_SIZE * 0.5, TILE_SIZE * 0.5)
+		var dir = _debug_dir_vector(_squad_facing[i])
+		var tip = center + Vector2(dir.x, dir.y) * (TILE_SIZE * 0.4)
+		draw_line(center, tip, DEBUG_ARROW_COLOR, 2.0)
+		if _debug_font != null and _squad_slack.size() > i and _squad_anchor_delay.size() > i:
+			var choke_marker = "*" if (_squad_choke.size() > i and _squad_choke[i] == 1) else ""
+			var label = "S%d slack %d%s d%d" % [i, _squad_slack[i], choke_marker, _squad_anchor_delay[i]]
+			draw_string(_debug_font, origin + Vector2(2, -4), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, DEBUG_TEXT_COLOR)
+
+func _debug_dir_vector(dir: int) -> Vector2i:
+	match dir:
+		BattleConstants.Dir.NORTH:
+			return Vector2i(0, -1)
+		BattleConstants.Dir.EAST:
+			return Vector2i(1, 0)
+		BattleConstants.Dir.SOUTH:
+			return Vector2i(0, 1)
+		BattleConstants.Dir.WEST:
+			return Vector2i(-1, 0)
+	return Vector2i.ZERO
 
 func render(replayer) -> void:
 	if replayer == null:

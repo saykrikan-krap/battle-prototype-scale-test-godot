@@ -15,9 +15,13 @@ From the project root:
 - macOS/Linux (bash/zsh): `./run.sh`
 - Windows (PowerShell): `.\run.ps1`
 
-Headless resolve (no rendering):
-- `./run.sh --headless --resolve-only`
+Headless resolve (no rendering, `--resolve-only` auto-adds `--headless`):
+- `./run.sh --resolve-only`
 - `.\run.ps1 --resolve-only`
+
+Resolve profiling (prints timing breakdown):
+- `./run.sh --resolve-only --profile-resolve`
+- `.\run.ps1 --resolve-only --profile-resolve`
 
 Custom battle setup (manual placement UI):
 - `./run.sh --custom-setup`

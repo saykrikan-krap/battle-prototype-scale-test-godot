@@ -27,6 +27,14 @@ var units_remaining = PackedInt32Array([0, 0])
 var tile_unit_count = PackedInt32Array()
 var tile_facing = PackedInt32Array()
 
+var squad_anchor_x = PackedInt32Array()
+var squad_anchor_y = PackedInt32Array()
+var squad_facing = PackedInt32Array()
+var squad_slack = PackedInt32Array()
+var squad_choke = PackedInt32Array()
+var squad_anchor_delay = PackedInt32Array()
+var squad_count: int = 0
+
 var projectile_ids = []
 var projectile_type = []
 var projectile_from = []
@@ -49,6 +57,7 @@ func _event_scan_for_init() -> void:
 	end_tick = 0
 	grid_width = 0
 	grid_height = 0
+	var max_squad_id = -1
 
 	for i in range(count):
 		var event_type = event_log.types[i]
@@ -60,6 +69,10 @@ func _event_scan_for_init() -> void:
 			var unit_id = event_log.a[i]
 			if unit_id > max_unit_id:
 				max_unit_id = unit_id
+		elif event_type == BattleConstants.EventType.SQUAD_DEBUG:
+			var squad_id = event_log.a[i]
+			if squad_id > max_squad_id:
+				max_squad_id = squad_id
 		elif event_type == BattleConstants.EventType.BATTLE_ENDED:
 			end_tick = event_log.b[i]
 
@@ -67,6 +80,7 @@ func _event_scan_for_init() -> void:
 		unit_count = max_unit_id + 1
 	if unit_count < 0:
 		unit_count = 0
+	squad_count = max_squad_id + 1 if max_squad_id >= 0 else 0
 
 	unit_alive.resize(unit_count)
 	unit_side.resize(unit_count)
@@ -103,6 +117,20 @@ func _reset_state() -> void:
 		tile_unit_count[i] = 0
 		tile_facing[i] = -1
 
+	squad_anchor_x.resize(squad_count)
+	squad_anchor_y.resize(squad_count)
+	squad_facing.resize(squad_count)
+	squad_slack.resize(squad_count)
+	squad_choke.resize(squad_count)
+	squad_anchor_delay.resize(squad_count)
+	for i in range(squad_count):
+		squad_anchor_x[i] = -1
+		squad_anchor_y[i] = -1
+		squad_facing[i] = 0
+		squad_slack[i] = 0
+		squad_choke[i] = 0
+		squad_anchor_delay[i] = 0
+
 	projectile_ids.clear()
 	projectile_type.clear()
 	projectile_from.clear()
@@ -110,6 +138,25 @@ func _reset_state() -> void:
 	projectile_fire_tick.clear()
 	projectile_impact_tick.clear()
 	projectile_index_by_id.clear()
+
+func _ensure_squad_capacity(min_size: int) -> void:
+	if min_size <= squad_count:
+		return
+	var old_size = squad_count
+	squad_count = min_size
+	squad_anchor_x.resize(squad_count)
+	squad_anchor_y.resize(squad_count)
+	squad_facing.resize(squad_count)
+	squad_slack.resize(squad_count)
+	squad_choke.resize(squad_count)
+	squad_anchor_delay.resize(squad_count)
+	for i in range(old_size, squad_count):
+		squad_anchor_x[i] = -1
+		squad_anchor_y[i] = -1
+		squad_facing[i] = 0
+		squad_slack[i] = 0
+		squad_choke[i] = 0
+		squad_anchor_delay[i] = 0
 
 func set_playing(value: bool) -> void:
 	playing = value
@@ -239,6 +286,20 @@ func _apply_event(index: int) -> void:
 					if tile_unit_count[removed_tile] <= 0:
 						tile_unit_count[removed_tile] = 0
 						tile_facing[removed_tile] = -1
+		BattleConstants.EventType.SQUAD_DEBUG:
+			var squad_id = event_log.a[index]
+			if squad_id < 0:
+				return
+			_ensure_squad_capacity(squad_id + 1)
+			var pos = event_log.b[index]
+			var packed = event_log.c[index]
+			var packed2 = event_log.d[index]
+			squad_anchor_x[squad_id] = BattleConstants.decode_x(pos)
+			squad_anchor_y[squad_id] = BattleConstants.decode_y(pos)
+			squad_facing[squad_id] = (packed >> 16) & 0xFFFF
+			squad_slack[squad_id] = packed & 0xFFFF
+			squad_anchor_delay[squad_id] = packed2 & 0xFFFF
+			squad_choke[squad_id] = (packed2 >> 16) & 1
 		BattleConstants.EventType.BATTLE_ENDED:
 			end_tick = event_log.b[index]
 		_:
