@@ -99,12 +99,15 @@ This is the single biggest lever for scale.
 
 ## 7. Pathing Implementation (Distance Field)
 
-Implement the base document’s “distance field per side” approach:
+Implement the base document’s **soft-cost Dijkstra** approach:
 
 Per tick (or when you choose to recompute):
-1. Build a passability grid for size-2 and size-3 movers.
-2. Run a multi-source BFS seeded from enemy-occupied tiles.
-3. Each moving unit picks a neighbor tile that decreases distance and is passable.
+1. Build passability + cost data for size-2 and size-3 movers.
+2. Run a multi-source **Dijkstra** seeded from enemy-occupied tiles.
+   - Empty tile cost = 1
+   - Friendly tile cost = 1 + (friendly unit count × penalty)
+   - Enemy tiles are blocked
+3. Each moving unit picks a neighbor tile with the lowest distance that is passable.
 
 Keep tie-breaking deterministic (fixed neighbor order).
 
@@ -234,4 +237,3 @@ This lets you profile simulation speed independent of rendering.
 - [ ] Debug overlay reports FPS and resolve timing.
 - [ ] Baseline render approach can display all units distinctly.
 - [ ] Optional: headless resolve mode for profiling.
-

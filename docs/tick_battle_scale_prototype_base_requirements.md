@@ -286,15 +286,20 @@ Same as infantry logic, but using their move/attack costs.
 ## Movement & Pathing (Scale-Friendly Requirement)
 
 The original small-scale prototype could do BFS per unit. At 2000 units, that can become a bottleneck.
+The current implementation uses **soft-cost Dijkstra** fields (not plain BFS) to account for friendly congestion.
 
 Minimum requirement:
 - Movement decision must be **bounded and predictable** per tick.
 
 Recommended approach:
-- Build a **distance field (multi-source BFS)** per side each tick (or when needed), seeded from all enemy-occupied tiles.
+- Build a **distance field (multi-source Dijkstra)** per side and unit size each tick (or when needed), seeded from all enemy-occupied tiles.
+- Tile cost model:
+  - Empty tile cost = 1
+  - Friendly-occupied tile cost = 1 + (friendly unit count × friendly penalty)
+  - Enemy-occupied tiles are blocked
 - For each unit that wants to move:
   - Evaluate the 4 neighbor tiles (up/down/left/right).
-  - Choose a neighbor that reduces distance while being passable for that unit’s size constraints.
+  - Choose a neighbor with the lowest distance that is passable for that unit’s size constraints.
   - Tie-break deterministically (e.g., fixed direction order N/E/S/W).
 
 Passability rules (per unit size):
