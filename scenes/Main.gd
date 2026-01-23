@@ -13,6 +13,10 @@ const CUSTOM_FLAG = "--custom-setup"
 const CUSTOM_SQUAD_SIZE_DEFAULT = 50
 const CUSTOM_SQUAD_SIZE_INFANTRY = 64
 const CUSTOM_SQUAD_SIZE_CAVALRY = 48
+const FACING_NORTH = 0
+const FACING_EAST = 1
+const FACING_SOUTH = 2
+const FACING_WEST = 3
 
 var _battle_view
 var _battle_ui
@@ -31,6 +35,7 @@ var _placing_unit_type: int = -1
 var _next_unit_id: int = 0
 var _next_squad_id: int = 0
 var _setup_tile_unit_count = PackedInt32Array()
+var _show_squad_debug: bool = false
 
 func _ready() -> void:
 	var args = OS.get_cmdline_args()
@@ -40,6 +45,7 @@ func _ready() -> void:
 
 	_battle_view = BattleView.new()
 	add_child(_battle_view)
+	_battle_view.set_squad_debug_enabled(_show_squad_debug)
 
 	_battle_ui = BattleUI.new()
 	add_child(_battle_ui)
@@ -76,6 +82,8 @@ func _process(delta: float) -> void:
 		if not _resolving:
 			_replayer.update(delta)
 		_battle_view.render(_replayer)
+		if _show_squad_debug:
+			_battle_view.sync_squad_debug(_replayer)
 		_update_hover_panel()
 	if _battle_view != null:
 		if _custom_mode and not _resolving:
@@ -126,6 +134,10 @@ func _input(event) -> void:
 			return
 		if event.keycode == KEY_SPACE and _allow_play_toggle:
 			_on_play_toggled(not _replayer.playing)
+		if event.keycode == KEY_F3:
+			_show_squad_debug = not _show_squad_debug
+			if _battle_view != null:
+				_battle_view.set_squad_debug_enabled(_show_squad_debug)
 
 func _unhandled_input(event) -> void:
 	if event is InputEventMouseButton and event.pressed:
@@ -222,6 +234,7 @@ func _update_debug_overlay() -> void:
 		lines.append("Resolve: %d ms (%.1f tps)" % [_last_result.resolve_ms, _last_result.avg_ticks_per_sec])
 		lines.append("Log hash: %08x" % _last_result.event_hash)
 		lines.append("Winner: %s" % _winner_name(_last_result.winner))
+	lines.append("Formation debug: %s" % ("on" if _show_squad_debug else "off"))
 	if _resolving:
 		lines.append("Resolving...")
 	_battle_ui.set_debug_text("\n".join(lines))
@@ -235,7 +248,9 @@ func _winner_name(winner: int) -> String:
 
 func _run_headless_resolve() -> void:
 	var input = ScaleTestV1.build()
-	var result = BattleResolver.resolve(input)
+	var args = OS.get_cmdline_args()
+	var profile = "--profile-resolve" in args
+	var result = BattleResolver.resolve(input, profile)
 	var battle_result = result.get("result", null)
 	if battle_result != null:
 		print("Resolved ticks: %d" % battle_result.ticks_elapsed)
@@ -395,6 +410,9 @@ func _try_place_squad() -> bool:
 	_setup_input.squad_formations.append(BattleConstants.Formation.SQUARE)
 
 	var unit_size = BattleConstants.UNIT_SIZE[_placing_unit_type]
+	var facing = FACING_EAST if _placing_side == BattleConstants.Side.RED else FACING_WEST
+	var anchor_local = _formation_anchor_local(int(layout["height"]))
+	var anchor_world = Vector2i(anchor.x, anchor.y + anchor_local.y)
 	for i in range(tiles.size()):
 		var tile = tiles[i]
 		var count = layout["tile_units"][i]
@@ -410,6 +428,10 @@ func _try_place_squad() -> bool:
 			_setup_input.unit_y.append(tile.y)
 			_setup_input.unit_next_tick.append(0)
 			_setup_input.unit_squad_ids.append(squad_id)
+			var offset = Vector2i(tile.x - anchor_world.x, tile.y - anchor_world.y)
+			var canonical = _to_canonical_offset(offset, facing)
+			_setup_input.unit_slot_dx.append(canonical.x)
+			_setup_input.unit_slot_dy.append(canonical.y)
 			if tile_index >= 0 and tile_index < _setup_tile_unit_count.size():
 				_setup_tile_unit_count[tile_index] += 1
 
@@ -466,6 +488,24 @@ func _square_tile_positions(tile_count: int) -> Dictionary:
 		"height": height,
 		"positions": positions,
 	}
+
+func _formation_anchor_local(height: int) -> Vector2i:
+	var y = int(floor(float(height - 1) / 2.0))
+	if y < 0:
+		y = 0
+	return Vector2i(0, y)
+
+func _to_canonical_offset(offset: Vector2i, facing: int) -> Vector2i:
+	match facing:
+		FACING_NORTH:
+			return offset
+		FACING_EAST:
+			return Vector2i(offset.y, -offset.x)
+		FACING_SOUTH:
+			return Vector2i(-offset.x, -offset.y)
+		FACING_WEST:
+			return Vector2i(-offset.y, offset.x)
+	return offset
 
 func _layout_world_tiles(layout: Dictionary, anchor: Vector2i, side: int) -> Array:
 	var tiles = []

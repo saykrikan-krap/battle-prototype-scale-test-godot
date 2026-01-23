@@ -33,4 +33,19 @@ if [[ "$UNAME" != MINGW* && "$UNAME" != MSYS* && "$UNAME" != CYGWIN* ]]; then
   fi
 fi
 
-exec "$GODOT_BIN" --path "$SCRIPT_DIR" "$@"
+resolve_only=0
+headless=0
+for arg in "$@"; do
+  if [[ "$arg" == "--resolve-only" ]]; then
+    resolve_only=1
+  elif [[ "$arg" == "--headless" ]]; then
+    headless=1
+  fi
+done
+
+extra_args=()
+if [[ $resolve_only -eq 1 && $headless -eq 0 ]]; then
+  extra_args+=(--headless)
+fi
+
+exec "$GODOT_BIN" --path "$SCRIPT_DIR" "${extra_args[@]}" "$@"

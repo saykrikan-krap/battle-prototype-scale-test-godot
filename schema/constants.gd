@@ -11,6 +11,13 @@ enum Facing {
 	RIGHT = 1,
 }
 
+enum Dir {
+	NORTH = 0,
+	EAST = 1,
+	SOUTH = 2,
+	WEST = 3,
+}
+
 enum UnitType {
 	INFANTRY = 0,
 	HEAVY_INFANTRY = 1,
@@ -30,6 +37,7 @@ enum EventType {
 	PROJECTILE_IMPACTED = 5,
 	UNIT_REMOVED = 6,
 	BATTLE_ENDED = 7,
+	SQUAD_DEBUG = 8,
 }
 
 enum ProjectileType {

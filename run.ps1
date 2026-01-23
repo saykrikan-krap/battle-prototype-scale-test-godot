@@ -30,7 +30,14 @@ if (!(Test-Path $GodotBin)) {
   exit 1
 }
 
-& $GodotBin --path $ScriptDir @args
+$resolveOnly = $args -contains "--resolve-only"
+$headless = $args -contains "--headless"
+$extraArgs = @()
+if ($resolveOnly -and -not $headless) {
+  $extraArgs += "--headless"
+}
+
+& $GodotBin --path $ScriptDir @extraArgs @args
 $exitCode = $LASTEXITCODE
 if ($exitCode -ne 0) {
   exit $exitCode

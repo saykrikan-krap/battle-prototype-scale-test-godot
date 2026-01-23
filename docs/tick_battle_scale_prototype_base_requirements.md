@@ -22,7 +22,7 @@ This document is derived from the earlier “tick-based battle prototype plan”
 
 ### Explicit non-goals
 - No audio, no UI polish, no networking.
-- No advanced tactics, morale, facing, flanking, etc. (Squad formations are used only for initial placement and are not maintained.)
+- No advanced tactics, morale, or flanking beyond the formation movement rules in the companion pathing guide.
 - No sophisticated balance.
 - Heavy optimization is **not required** yet, but the design must avoid obviously catastrophic patterns (e.g., O(units × grid) BFS per tick).
 
@@ -202,7 +202,7 @@ If movement fails → unit waits 1 tick.
 Total: **1000 units per side** (2000 total).
 
 ### Squads & Formations (v1)
-- Squads are a lightweight grouping for placement only (no formation maintenance during combat).
+- Squads are used for placement **and** formation-aware movement (see companion pathing guide).
 - Max squad size: **50**.
 - Each squad has:
   - `id`
@@ -286,21 +286,26 @@ Same as infantry logic, but using their move/attack costs.
 ## Movement & Pathing (Scale-Friendly Requirement)
 
 The original small-scale prototype could do BFS per unit. At 2000 units, that can become a bottleneck.
-The current implementation uses **soft-cost Dijkstra** fields (not plain BFS) to account for friendly congestion.
+The current implementation uses a **strategic distance field (multi-source Dijkstra)** plus **formation-aware movement**.
 
 Minimum requirement:
 - Movement decision must be **bounded and predictable** per tick.
 
-Recommended approach:
-- Build a **distance field (multi-source Dijkstra)** per side and unit size each tick (or when needed), seeded from all enemy-occupied tiles.
-- Tile cost model:
-  - Empty tile cost = 1
-  - Friendly-occupied tile cost = 1 + (friendly unit count × friendly penalty)
-  - Enemy-occupied tiles are blocked
-- For each unit that wants to move:
-  - Evaluate the 4 neighbor tiles (up/down/left/right).
-  - Choose a neighbor with the lowest distance that is passable for that unit’s size constraints.
-  - Tie-break deterministically (e.g., fixed direction order N/E/S/W).
+Required approach (see `tick_battle_scale_prototype_squad_pathing_companion.md` for full detail):
+- Build a cached **distance field (multi-source Dijkstra)** per side and unit size, seeded from all enemy-occupied tiles.
+  - Terrain + objectives only.
+  - Do **not** include friendly occupancy as a Dijkstra cost.
+- Rebuild fields on a cadence:
+  - when dirty (terrain/occupancy changes) **and** past `REBUILD_INTERVAL_TICKS`,
+  - or when `MAX_STALE_TICKS` is reached (safety).
+- Allow a stale guard to force a rebuild if units repeatedly fail to improve their goal distance.
+- If all edge costs are uniform, a BFS fast path is acceptable (equivalent to Dijkstra).
+- Each squad updates a virtual **anchor** that follows the field.
+- Each unit evaluates `{stay, N, E, S, W}` and chooses:
+  - near-best **goal progress** (within slack), then
+  - best **formation adherence** (distance to desired slot).
+- Apply movement in **two phases** (intent then conflict resolution) so same-tick units do not treat each other as static blockers.
+- Apply detach/reattach rules for stragglers to avoid slow units stalling the whole squad.
 
 Passability rules (per unit size):
 - Tile is passable if:
@@ -328,6 +333,7 @@ Passability rules (per unit size):
   - `side`
   - `formation`
 - `unitSquadIds[]` (parallel to `units[]`)
+- `unitSlotDx[]`, `unitSlotDy[]` (canonical formation slot offsets, parallel to `units[]`)
 
 ### Event Log
 Each event:
