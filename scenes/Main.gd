@@ -166,8 +166,7 @@ func _on_custom_mode_toggled(enabled: bool) -> void:
 		_allow_play_toggle = false
 		return
 
-	if _setup_input == null:
-		_setup_input = ScaleTestV1.build_empty()
+	_setup_input = ScaleTestV1.build_empty()
 	_next_unit_id = _setup_input.unit_ids.size()
 	_next_squad_id = _setup_input.squad_ids.size()
 	_rebuild_setup_occupancy()
