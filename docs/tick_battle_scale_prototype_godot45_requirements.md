@@ -110,6 +110,14 @@ Required implementation shape:
  - Cache fields per `(side, size)` and rebuild on a cadence (dirty + `REBUILD_INTERVAL_TICKS`, or `MAX_STALE_TICKS` safety).
  - A BFS fast path is allowed when all edge costs are uniform.
 
+### Terrain Costs (v1)
+- Track `tile_terrain` in `BattleInput` and log `TERRAIN_SET` events at tick 0 for replay.
+- Terrain types:
+  - Grassland: cost **1**
+  - Trees: cost **2**
+- Movement delay = base move cost × terrain cost.
+- Cavalry (including Heavy Cavalry) use the Infantry base move cost on trees (no speed advantage).
+
 ---
 
 ## 8. Event Log Representation (Memory Matters)

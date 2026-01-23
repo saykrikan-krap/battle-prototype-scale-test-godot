@@ -308,6 +308,18 @@ func _show_preview(input) -> void:
 		input.time_limit_ticks,
 		input.unit_count()
 	)
+	var tile_count = input.grid_width * input.grid_height
+	if input.tile_terrain.size() == tile_count:
+		for tile in range(tile_count):
+			log.add_event(
+				0,
+				0,
+				BattleConstants.EventType.TERRAIN_SET,
+				tile,
+				input.tile_terrain[tile],
+				0,
+				0
+			)
 	for i in range(input.unit_count()):
 		var unit_id = input.unit_ids[i]
 		log.add_event(

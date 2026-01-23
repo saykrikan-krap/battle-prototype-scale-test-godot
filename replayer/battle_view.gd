@@ -15,6 +15,8 @@ const OVERLAY_RED = Color(0.85, 0.2, 0.2, 0.18)
 const OVERLAY_BLUE = Color(0.2, 0.45, 0.9, 0.18)
 const DEPLOY_RED = Color(0.9, 0.25, 0.25, 0.1)
 const DEPLOY_BLUE = Color(0.25, 0.5, 0.95, 0.1)
+const TERRAIN_TREES_FILL = Color(0.1, 0.2, 0.12, 0.5)
+const TERRAIN_TREES_MARK = Color(0.2, 0.5, 0.25, 0.9)
 const GHOST_ALPHA = 0.35
 const GHOST_INVALID_ALPHA = 0.55
 const DEBUG_ANCHOR_COLOR = Color(0.98, 0.9, 0.3, 0.9)
@@ -70,6 +72,7 @@ var _deploy_blue_rect: Rect2i = Rect2i()
 var _show_deploy_zones: bool = false
 var _zoom: float = VIEW_SCALE
 var _tile_side = PackedInt32Array()
+var _tile_terrain = PackedInt32Array()
 var _hovered_tile = Vector2i(-1, -1)
 var _show_squad_debug: bool = false
 var _squad_anchor_x = PackedInt32Array()
@@ -191,6 +194,13 @@ func _draw() -> void:
 	var total_height = grid_height * TILE_SIZE
 	draw_rect(Rect2(0, 0, total_width, total_height), Color(0.08, 0.09, 0.12))
 
+	if _tile_terrain.size() == grid_width * grid_height:
+		for y in range(grid_height):
+			for x in range(grid_width):
+				var tile = x + y * grid_width
+				if _tile_terrain[tile] == BattleConstants.TerrainType.TREES:
+					draw_rect(Rect2(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE), TERRAIN_TREES_FILL)
+
 	if _show_deploy_zones:
 		_draw_deploy_zone(_deploy_red_rect, DEPLOY_RED)
 		_draw_deploy_zone(_deploy_blue_rect, DEPLOY_BLUE)
@@ -204,6 +214,14 @@ func _draw() -> void:
 					draw_rect(Rect2(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE), OVERLAY_RED)
 				elif side == BattleConstants.Side.BLUE:
 					draw_rect(Rect2(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE), OVERLAY_BLUE)
+
+	if _tile_terrain.size() == grid_width * grid_height:
+		var marker_radius = TILE_SIZE * 0.12
+		for y in range(grid_height):
+			for x in range(grid_width):
+				var tile = x + y * grid_width
+				if _tile_terrain[tile] == BattleConstants.TerrainType.TREES:
+					draw_circle(_tile_center(x, y), marker_radius, TERRAIN_TREES_MARK)
 
 	var line_color = Color(0.18, 0.2, 0.25)
 	for x in range(grid_width + 1):
@@ -271,9 +289,9 @@ func render(replayer) -> void:
 		return
 	setup(replayer.grid_width, replayer.grid_height)
 	if replayer.unit_alive.size() == 0:
+		_update_tile_overlay(replayer)
 		_clear_unit_meshes()
 		_clear_projectile_meshes()
-		_clear_tile_overlay()
 		return
 
 	_update_tile_overlay(replayer)
@@ -354,8 +372,11 @@ func _clear_tile_overlay() -> void:
 	var tile_count = grid_width * grid_height
 	if _tile_side.size() != tile_count:
 		_tile_side.resize(tile_count)
+	if _tile_terrain.size() != tile_count:
+		_tile_terrain.resize(tile_count)
 	for i in range(tile_count):
 		_tile_side[i] = -1
+		_tile_terrain[i] = BattleConstants.TerrainType.GRASS
 	queue_redraw()
 
 func _update_unit_meshes(replayer) -> void:
@@ -531,8 +552,15 @@ func _update_tile_overlay(replayer) -> void:
 	var tile_count = grid_width * grid_height
 	if _tile_side.size() != tile_count:
 		_tile_side.resize(tile_count)
+	if _tile_terrain.size() != tile_count:
+		_tile_terrain.resize(tile_count)
+	var has_terrain = replayer.tile_terrain.size() == tile_count
 	for i in range(tile_count):
 		_tile_side[i] = -1
+		if has_terrain:
+			_tile_terrain[i] = replayer.tile_terrain[i]
+		else:
+			_tile_terrain[i] = BattleConstants.TerrainType.GRASS
 	var unit_count = replayer.unit_alive.size()
 	for id in range(unit_count):
 		if replayer.unit_alive[id] == 0:

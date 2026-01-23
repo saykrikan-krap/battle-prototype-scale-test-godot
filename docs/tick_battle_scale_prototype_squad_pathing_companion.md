@@ -96,6 +96,12 @@ Optional (but helpful):
 
 - `terrain_type[tile] : int`
 - `terrain_version : int` (increment on spell changes)
+- Prototype v1 terrain types:
+  - Grassland = 0
+  - Trees = 1
+- Prototype v1 terrain costs:
+  - Grassland: 1
+  - Trees: 2
 
 ### 3.4 Occupancy index
 
@@ -141,6 +147,7 @@ Provide a function:
 Rules:
 - If `tile_to` is impassable for this (profile,size), it is not expanded.
 - Cost must be **integer** for determinism and easy slack tuning.
+- Prototype v1: `step_cost = TERRAIN_COST[terrain_type[tile_to]]` (grass=1, trees=2).
 
 Important: **Do not include friendly occupancy in this step cost.**
 
@@ -301,11 +308,13 @@ When a unit moves into `p`, set:
 - `next_tick[u] += move_delay(unit_type[u], terrain_type[p], status_effects[u])`
 
 Prototype: if statuses aren’t implemented yet, just use `terrain_type[p]` and unit base speed.
+For trees, cavalry types use the Infantry base move cost before applying the multiplier.
 
 Examples:
-- cavalry on open: 6
-- infantry on open: 10
-- cavalry in woods: 10 (advantage removed)
+- cavalry on open: 4
+- infantry on open: 6
+- cavalry in trees: 12 (advantage removed)
+- infantry in trees: 12
 - paralyzed: very large delay or “cannot move” flag (still can fight)
 
 ### 7.2 Why this avoids “rewrite tons of pathfinding code”

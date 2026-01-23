@@ -137,6 +137,16 @@ Move is 1 tile per action. Minimum cost is always ≥ 1 tick.
 | Heavy Cavalry    | 5 | 13 (melee) | 1 | heavier |
 | Mage             | 6 | 16 (fireball) | 1 | AoE |
 
+### Terrain Costs (v1)
+
+Terrain applies a movement multiplier to the base move cost:
+- Grassland: **1×**
+- Trees: **2×**
+
+Special case:
+- Cavalry (including Heavy Cavalry) **lose their speed advantage in trees** and use the Infantry base move cost before applying the 2× multiplier.
+- Terrain should be part of `BattleInput` and emitted in the event log at tick 0 so the replayer can render it.
+
 ### Melee Hit Chances
 
 Keep “one-hit removal,” but allow melee hit chance to vary by unit type:

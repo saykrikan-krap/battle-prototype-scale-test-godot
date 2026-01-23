@@ -44,7 +44,29 @@ static func _build_base_input(seed: int) -> BattleInput:
 	input.max_total_size_per_tile = MAX_TOTAL_SIZE_PER_TILE
 	input.seed = seed
 	input.time_limit_ticks = TIME_LIMIT_TICKS
+	input.tile_terrain = _build_terrain(GRID_WIDTH, GRID_HEIGHT)
 	return input
+
+static func _build_terrain(width: int, height: int) -> PackedInt32Array:
+	var terrain = PackedInt32Array()
+	terrain.resize(width * height)
+	for i in range(terrain.size()):
+		terrain[i] = BattleConstants.TerrainType.GRASS
+
+	_add_tree_patch(terrain, width, height, Rect2i(18, 6, 10, 6))
+	_add_tree_patch(terrain, width, height, Rect2i(34, 16, 12, 7))
+	_add_tree_patch(terrain, width, height, Rect2i(50, 24, 12, 7))
+
+	return terrain
+
+static func _add_tree_patch(terrain: PackedInt32Array, width: int, height: int, rect: Rect2i) -> void:
+	var x0 = clamp(rect.position.x, 0, width)
+	var y0 = clamp(rect.position.y, 0, height)
+	var x1 = clamp(rect.position.x + rect.size.x, 0, width)
+	var y1 = clamp(rect.position.y + rect.size.y, 0, height)
+	for y in range(y0, y1):
+		for x in range(x0, x1):
+			terrain[x + y * width] = BattleConstants.TerrainType.TREES
 
 static func _populate_side(input, side: int, zone_start: int, next_unit_id: int, next_squad_id: int) -> Dictionary:
 	var front_is_high = side == BattleConstants.Side.RED

@@ -28,6 +28,11 @@ enum UnitType {
 	MAGE = 6,
 }
 
+enum TerrainType {
+	GRASS = 0,
+	TREES = 1,
+}
+
 enum EventType {
 	BATTLE_INIT = 0,
 	UNIT_SPAWNED = 1,
@@ -38,6 +43,7 @@ enum EventType {
 	UNIT_REMOVED = 6,
 	BATTLE_ENDED = 7,
 	SQUAD_DEBUG = 8,
+	TERRAIN_SET = 9,
 }
 
 enum ProjectileType {
@@ -59,6 +65,7 @@ static var PROJECTILE_SPEED = PackedInt32Array([2, 3])
 static var DEFAULT_FACING = PackedInt32Array([Facing.RIGHT, Facing.LEFT])
 
 const MAX_SQUAD_SIZE = 50
+static var TERRAIN_COST = PackedInt32Array([1, 2])
 
 const NEIGHBOR_DIRS = [
 	Vector2i(0, -1),

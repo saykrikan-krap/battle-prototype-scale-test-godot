@@ -19,6 +19,8 @@ var unit_squad_ids = PackedInt32Array()
 var unit_slot_dx = PackedInt32Array()
 var unit_slot_dy = PackedInt32Array()
 
+var tile_terrain = PackedInt32Array()
+
 var squad_ids = PackedInt32Array()
 var squad_sides = PackedInt32Array()
 var squad_formations = PackedInt32Array()

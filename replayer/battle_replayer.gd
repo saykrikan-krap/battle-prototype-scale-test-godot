@@ -25,6 +25,7 @@ var last_move_tick = PackedInt32Array()
 var last_attack_tick = PackedInt32Array()
 var units_remaining = PackedInt32Array([0, 0])
 var tile_unit_count = PackedInt32Array()
+var tile_terrain = PackedInt32Array()
 var tile_facing = PackedInt32Array()
 
 var squad_anchor_x = PackedInt32Array()
@@ -112,9 +113,11 @@ func _reset_state() -> void:
 
 	var tile_count = grid_width * grid_height
 	tile_unit_count.resize(tile_count)
+	tile_terrain.resize(tile_count)
 	tile_facing.resize(tile_count)
 	for i in range(tile_count):
 		tile_unit_count[i] = 0
+		tile_terrain[i] = BattleConstants.TerrainType.GRASS
 		tile_facing[i] = -1
 
 	squad_anchor_x.resize(squad_count)
@@ -208,6 +211,11 @@ func _apply_event(index: int) -> void:
 		BattleConstants.EventType.BATTLE_INIT:
 			grid_width = event_log.a[index]
 			grid_height = event_log.b[index]
+		BattleConstants.EventType.TERRAIN_SET:
+			var tile = event_log.a[index]
+			var terrain_type = event_log.b[index]
+			if tile >= 0 and tile < tile_terrain.size():
+				tile_terrain[tile] = terrain_type
 		BattleConstants.EventType.UNIT_SPAWNED:
 			var unit_id = event_log.a[index]
 			var side = event_log.b[index]
