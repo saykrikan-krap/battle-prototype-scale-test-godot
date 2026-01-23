@@ -22,7 +22,7 @@ This document is derived from the earlier “tick-based battle prototype plan”
 
 ### Explicit non-goals
 - No audio, no UI polish, no networking.
-- No advanced tactics, morale, formations, facing, flanking, etc.
+- No advanced tactics, morale, facing, flanking, etc. (Squad formations are used only for initial placement and are not maintained.)
 - No sophisticated balance.
 - Heavy optimization is **not required** yet, but the design must avoid obviously catastrophic patterns (e.g., O(units × grid) BFS per tick).
 
@@ -106,15 +106,17 @@ Sizes follow the existing base types:
 
 ### Battle Grid (Scale Test v1)
 
-A **larger grid** is required. Use:
+Use:
 
-- Grid size: **42 × 20**
-- Deployment:
+- Grid size: **80 × 40**
+- Deployment width: **15** columns per side
+- Deployment height: **32** rows, centered vertically (4-tile margins top/bottom)
+- Deployment columns:
   - **Red**: columns **0–14**
-  - **Blue**: columns **27–41**
-  - Neutral zone: columns **15–26**
-
-> This gives 15×20 = 300 deployment tiles per side (enough for ~275 packed tiles with the constraints below).
+  - **Blue**: columns **65–79**
+  - Neutral zone: columns **15–64**
+  
+This yields **15 × 32** deployment tiles per side.
 
 ### Tick Rate (Replay)
 - Default: **20 ticks/sec**
@@ -166,7 +168,7 @@ impactTick = fireTick + (speed * distance)
 - No HP.
 - If damaged → unit removed immediately.
 - Arrow: on impact, removes a random enemy on the impacted tile (if any).
-- Fireball: on impact, removes **all enemy units** on the impacted tile.
+- Fireball: on impact, removes **all units** on the impacted tile.
 - Fireball affects enemies only (prototype assumption).
 
 ### Target Movement Rule (unchanged)
@@ -199,25 +201,32 @@ If movement fails → unit waits 1 tick.
 
 Total: **1000 units per side** (2000 total).
 
+### Squads & Formations (v1)
+- Squads are a lightweight grouping for placement only (no formation maintenance during combat).
+- Max squad size: **50**.
+- Each squad has:
+  - `id`
+  - `side`
+  - `formation` (currently **Square** only)
+- For Scale Test v1, squads are created per unit type (homogeneous squads), but the data model does not require that.
+
+**Square formation rule**
+- Pack squad units into tiles respecting tile constraints (max units + max total size).
+- Arrange the resulting tiles into the smallest possible square-ish footprint (row-major fill).
+
 ### Initial Placement (Deterministic, Constraint-Safe)
 
 Hardcode a deterministic placement algorithm instead of a placement UI.
 
-**Recommended packing approach**
-- Use the deployment region for each side.
-- Fill tiles in a deterministic order while respecting constraints:
-  - Size-2 units: pack up to 4 per tile (size 8 total).
-  - Size-3 units: pack up to 3 per tile (size 9 total).
-- Avoid mixing sizes unless you specifically want a stress-test of mixed packing logic.
-
-**Concrete layout (simple + symmetrical)**
-- In each deployment zone (15×20 tiles):
-  - **Flanks**: columns 0–2 and 12–14 (6 columns) filled with cavalry first:
-    - 150 Cavalry, then 150 Heavy Cavalry
-    - Pack 3 per tile, row-major from the front line inward
-  - **Center**: columns 3–11 (9 columns) filled with size-2 units:
-    - 150 Heavy Infantry, 150 Infantry, 150 Elite Infantry, 200 Archers, 50 Mages
-    - Pack 4 per tile, row-major from the front line inward
+**Current approach**
+- Use the deployment region for each side (15 × 32 tiles).
+- Build squads from the roster in deterministic order.
+- For each squad:
+  - Pack units into tiles with size/count constraints.
+  - Place tiles in a square formation footprint.
+- Place squad footprints into a deterministic block grid within the deployment zone to avoid overlap.
+  - Block size equals the largest squad footprint for the side.
+  - Red squads are front-aligned toward the neutral zone; Blue squads are front-aligned toward the neutral zone.
 
 **Front line definition**
 - Red front is toward increasing X (toward the neutral zone).
@@ -309,6 +318,11 @@ Passability rules (per unit size):
   - `size`
   - `pos` (x, y)
   - `nextAvailableTick` (optional; default 0)
+- `squads[]`:
+  - `id`
+  - `side`
+  - `formation`
+- `unitSquadIds[]` (parallel to `units[]`)
 
 ### Event Log
 Each event:
