@@ -170,6 +170,9 @@ func render(replayer) -> void:
 		return
 	setup(replayer.grid_width, replayer.grid_height)
 	if replayer.unit_alive.size() == 0:
+		_clear_unit_meshes()
+		_clear_projectile_meshes()
+		_clear_tile_overlay()
 		return
 
 	_update_tile_overlay(replayer)
@@ -233,6 +236,26 @@ func _make_multimesh_instance(texture: Texture2D, color: Color) -> MultiMeshInst
 	instance.texture = texture
 	instance.modulate = color
 	return instance
+
+func _clear_unit_meshes() -> void:
+	_ensure_meshes()
+	for mesh in _unit_meshes:
+		mesh.multimesh.instance_count = 0
+
+func _clear_projectile_meshes() -> void:
+	_ensure_meshes()
+	for mesh in _projectile_meshes:
+		mesh.multimesh.instance_count = 0
+
+func _clear_tile_overlay() -> void:
+	if grid_width <= 0 or grid_height <= 0:
+		return
+	var tile_count = grid_width * grid_height
+	if _tile_side.size() != tile_count:
+		_tile_side.resize(tile_count)
+	for i in range(tile_count):
+		_tile_side[i] = -1
+	queue_redraw()
 
 func _update_unit_meshes(replayer) -> void:
 	var unit_count = replayer.unit_alive.size()
