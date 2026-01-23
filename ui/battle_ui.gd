@@ -6,7 +6,6 @@ signal play_toggled(playing: bool)
 signal step_requested
 signal speed_changed(ticks_per_second: int)
 signal unit_details_closed
-signal custom_mode_toggled(enabled: bool)
 signal placement_side_changed(side: int)
 signal placement_unit_selected(unit_type: int)
 signal placement_canceled
@@ -25,12 +24,13 @@ var _hover_panel: PanelContainer
 var _hover_title: Label
 var _hover_entries = []
 var _unit_textures = []
+var _unit_icons = []
 var _setup_panel: PanelContainer
-var _custom_toggle: CheckBox
 var _side_option: OptionButton
 var _unit_buttons = []
 var _cancel_placement: Button
 var _selected_unit_type: int = -1
+var _custom_setup_enabled: bool = false
 var _details_backdrop: ColorRect
 var _details_panel: PanelContainer
 var _details_title: Label
@@ -179,8 +179,7 @@ func set_resolving(resolving: bool) -> void:
 	_start_button.disabled = resolving
 	_status_label.text = "Resolving..." if resolving else ""
 	_spinner_label.visible = resolving
-	if _setup_panel != null and _start_overlay != null:
-		_setup_panel.visible = _start_overlay.visible and not resolving
+	_update_setup_visibility()
 	if resolving:
 		_spinner_index = 0
 		_spinner_elapsed = 0.0
@@ -193,8 +192,20 @@ func set_playing(playing: bool) -> void:
 func set_start_overlay_visible(visible: bool) -> void:
 	_start_overlay.visible = visible
 	_panel.visible = not visible
-	if _setup_panel != null:
-		_setup_panel.visible = visible
+	_update_setup_visibility()
+
+func set_custom_setup_enabled(enabled: bool) -> void:
+	_custom_setup_enabled = enabled
+	_set_custom_controls_enabled(enabled)
+	_update_setup_visibility()
+
+func _update_setup_visibility() -> void:
+	if _setup_panel == null:
+		return
+	if _start_overlay == null:
+		_setup_panel.visible = false
+		return
+	_setup_panel.visible = _custom_setup_enabled and _start_overlay.visible and not _resolving
 
 func set_debug_text(text: String) -> void:
 	_debug_label.text = text
@@ -270,17 +281,11 @@ func _update_unit_button_states() -> void:
 		var unit_type = int(entry["type"])
 		button.button_pressed = unit_type == _selected_unit_type
 
-func _on_custom_toggled(enabled: bool) -> void:
-	_set_custom_controls_enabled(enabled)
-	emit_signal("custom_mode_toggled", enabled)
-
 func _on_side_selected(index: int) -> void:
 	var side = _side_option.get_item_id(index)
 	emit_signal("placement_side_changed", side)
 
 func _on_unit_button_pressed(unit_type: int) -> void:
-	if _custom_toggle == null or not _custom_toggle.button_pressed:
-		return
 	if _selected_unit_type == unit_type:
 		clear_placement_selection()
 		return
@@ -361,11 +366,6 @@ func _build_setup_panel() -> void:
 	title.text = "Custom Setup"
 	vbox.add_child(title)
 
-	_custom_toggle = CheckBox.new()
-	_custom_toggle.text = "Enable custom armies"
-	_custom_toggle.toggled.connect(_on_custom_toggled)
-	vbox.add_child(_custom_toggle)
-
 	var side_label = Label.new()
 	side_label.text = "Placing side"
 	vbox.add_child(side_label)
@@ -378,9 +378,10 @@ func _build_setup_panel() -> void:
 	vbox.add_child(_side_option)
 
 	var unit_label = Label.new()
-	unit_label.text = "Place squad (50)"
+	unit_label.text = "Place squad"
 	vbox.add_child(unit_label)
 
+	_ensure_unit_textures()
 	var grid = GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 6)
@@ -390,6 +391,9 @@ func _build_setup_panel() -> void:
 	for i in range(UNIT_NAMES.size()):
 		var button = Button.new()
 		button.text = UNIT_NAMES[i]
+		if i < _unit_icons.size():
+			button.icon = _unit_icons[i]
+			button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.toggle_mode = true
 		button.pressed.connect(Callable(self, "_on_unit_button_pressed").bind(i))
 		grid.add_child(button)
@@ -561,8 +565,18 @@ func _ensure_unit_textures() -> void:
 	if _unit_textures.size() > 0:
 		return
 	_unit_textures.resize(UNIT_TEXTURE_PATHS.size())
+	_unit_icons.resize(UNIT_TEXTURE_PATHS.size())
 	for i in range(UNIT_TEXTURE_PATHS.size()):
-		_unit_textures[i] = _load_texture(UNIT_TEXTURE_PATHS[i])
+		var texture = _load_texture(UNIT_TEXTURE_PATHS[i])
+		_unit_textures[i] = texture
+		var icon_texture = texture
+		if texture != null:
+			var image = texture.get_image()
+			if image != null:
+				var icon_image = image.duplicate()
+				icon_image.resize(18, 18, Image.INTERPOLATE_NEAREST)
+				icon_texture = ImageTexture.create_from_image(icon_image)
+		_unit_icons[i] = icon_texture
 
 func _load_texture(path: String) -> Texture2D:
 	var image = Image.new()

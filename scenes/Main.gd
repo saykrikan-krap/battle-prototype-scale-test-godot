@@ -9,6 +9,10 @@ const ScaleTestV1 = preload("res://scenarios/scale_test_v1.gd")
 const EventLog = preload("res://schema/event_log.gd")
 
 const DEFAULT_TPS = 20
+const CUSTOM_FLAG = "--custom-setup"
+const CUSTOM_SQUAD_SIZE_DEFAULT = 50
+const CUSTOM_SQUAD_SIZE_INFANTRY = 64
+const CUSTOM_SQUAD_SIZE_CAVALRY = 48
 
 var _battle_view
 var _battle_ui
@@ -44,13 +48,19 @@ func _ready() -> void:
 	_battle_ui.step_requested.connect(_on_step_requested)
 	_battle_ui.speed_changed.connect(_on_speed_changed)
 	_battle_ui.unit_details_closed.connect(_on_unit_details_closed)
-	_battle_ui.custom_mode_toggled.connect(_on_custom_mode_toggled)
 	_battle_ui.placement_side_changed.connect(_on_placement_side_changed)
 	_battle_ui.placement_unit_selected.connect(_on_placement_unit_selected)
 	_battle_ui.placement_canceled.connect(_on_placement_canceled)
 
-	var input = ScaleTestV1.build()
-	_show_preview(input)
+	_custom_mode = CUSTOM_FLAG in args
+	if _custom_mode:
+		_enter_custom_setup()
+	else:
+		var input = ScaleTestV1.build()
+		_show_preview(input)
+		_battle_ui.set_custom_setup_enabled(false)
+		if _battle_view != null:
+			_battle_view.set_deployment_zones(Rect2i(), Rect2i(), false)
 	_battle_ui.set_start_overlay_visible(true)
 	_battle_ui.set_resolving(false)
 	_allow_play_toggle = false
@@ -72,6 +82,7 @@ func _process(delta: float) -> void:
 			_update_ghost_preview()
 		else:
 			_battle_view.set_ghost_units([], true)
+		_update_deployment_overlay()
 
 	_update_debug_overlay()
 
@@ -155,23 +166,20 @@ func _on_speed_changed(tps: int) -> void:
 	if _replayer != null:
 		_replayer.set_ticks_per_second(tps)
 
-func _on_custom_mode_toggled(enabled: bool) -> void:
-	_custom_mode = enabled
+func _enter_custom_setup() -> void:
+	_custom_mode = true
 	_placing_unit_type = -1
 	if _battle_view != null:
 		_battle_view.set_ghost_units([], true)
-	if not enabled:
-		var input = ScaleTestV1.build()
-		_show_preview(input)
-		_allow_play_toggle = false
-		return
-
 	_setup_input = ScaleTestV1.build_empty()
-	_next_unit_id = _setup_input.unit_ids.size()
-	_next_squad_id = _setup_input.squad_ids.size()
+	_next_unit_id = 0
+	_next_squad_id = 0
 	_rebuild_setup_occupancy()
 	_show_preview(_setup_input)
 	_allow_play_toggle = false
+	if _battle_ui != null:
+		_battle_ui.set_custom_setup_enabled(true)
+	_update_deployment_overlay()
 
 func _on_placement_side_changed(side: int) -> void:
 	_placing_side = side
@@ -304,6 +312,26 @@ func _show_preview(input) -> void:
 func _is_setup_active() -> bool:
 	return not _allow_play_toggle and not _resolving
 
+func _custom_squad_size_for_type(unit_type: int) -> int:
+	match unit_type:
+		BattleConstants.UnitType.INFANTRY, BattleConstants.UnitType.HEAVY_INFANTRY, BattleConstants.UnitType.ELITE_INFANTRY:
+			return CUSTOM_SQUAD_SIZE_INFANTRY
+		BattleConstants.UnitType.CAVALRY, BattleConstants.UnitType.HEAVY_CAVALRY:
+			return CUSTOM_SQUAD_SIZE_CAVALRY
+		_:
+			return CUSTOM_SQUAD_SIZE_DEFAULT
+
+func _deployment_zone(side: int) -> Rect2i:
+	if _setup_input == null:
+		return Rect2i()
+	var deploy_width = ScaleTestV1.DEPLOY_WIDTH
+	var deploy_height = ScaleTestV1.DEPLOY_HEIGHT
+	var y_start = int((float(_setup_input.grid_height - deploy_height)) / 2.0)
+	var x_start = 0
+	if side == BattleConstants.Side.BLUE:
+		x_start = _setup_input.grid_width - deploy_width
+	return Rect2i(x_start, y_start, deploy_width, deploy_height)
+
 func _rebuild_setup_occupancy() -> void:
 	if _setup_input == null:
 		return
@@ -320,6 +348,16 @@ func _rebuild_setup_occupancy() -> void:
 		if tile >= 0 and tile < tile_count:
 			_setup_tile_unit_count[tile] += 1
 
+func _update_deployment_overlay() -> void:
+	if _battle_view == null:
+		return
+	if not _custom_mode or _setup_input == null or not _is_setup_active():
+		_battle_view.set_deployment_zones(Rect2i(), Rect2i(), false)
+		return
+	var red_zone = _deployment_zone(BattleConstants.Side.RED)
+	var blue_zone = _deployment_zone(BattleConstants.Side.BLUE)
+	_battle_view.set_deployment_zones(red_zone, blue_zone, true)
+
 func _update_ghost_preview() -> void:
 	if not _custom_mode or _placing_unit_type == -1:
 		_battle_view.set_ghost_units([], true)
@@ -330,9 +368,11 @@ func _update_ghost_preview() -> void:
 	if anchor.x < 0:
 		_battle_view.set_ghost_units([], true)
 		return
-	var layout = _build_squad_layout(_placing_unit_type, BattleConstants.MAX_SQUAD_SIZE)
+	var squad_size = _custom_squad_size_for_type(_placing_unit_type)
+	var layout = _build_squad_layout(_placing_unit_type, squad_size)
 	var tiles = _layout_world_tiles(layout, anchor, _placing_side)
-	var valid = _is_layout_valid(tiles)
+	var zone = _deployment_zone(_placing_side)
+	var valid = _is_layout_valid(tiles, zone)
 	var ghost_units = _build_ghost_units(layout, tiles, _placing_unit_type, _placing_side)
 	_battle_view.set_ghost_units(ghost_units, valid)
 
@@ -342,9 +382,11 @@ func _try_place_squad() -> bool:
 	var anchor = _battle_view.get_hovered_tile()
 	if anchor.x < 0:
 		return false
-	var layout = _build_squad_layout(_placing_unit_type, BattleConstants.MAX_SQUAD_SIZE)
+	var squad_size = _custom_squad_size_for_type(_placing_unit_type)
+	var layout = _build_squad_layout(_placing_unit_type, squad_size)
 	var tiles = _layout_world_tiles(layout, anchor, _placing_side)
-	if not _is_layout_valid(tiles):
+	var zone = _deployment_zone(_placing_side)
+	if not _is_layout_valid(tiles, zone):
 		return false
 	var squad_id = _next_squad_id
 	_next_squad_id += 1
@@ -437,13 +479,16 @@ func _layout_world_tiles(layout: Dictionary, anchor: Vector2i, side: int) -> Arr
 		tiles.append(Vector2i(world_x, world_y))
 	return tiles
 
-func _is_layout_valid(tiles: Array) -> bool:
+func _is_layout_valid(tiles: Array, zone: Rect2i) -> bool:
 	if _setup_input == null:
 		return false
 	for tile in tiles:
 		var pos = tile as Vector2i
 		if pos.x < 0 or pos.y < 0 or pos.x >= _setup_input.grid_width or pos.y >= _setup_input.grid_height:
 			return false
+		if zone.size.x > 0 and zone.size.y > 0:
+			if not zone.has_point(pos):
+				return false
 		var tile_index = BattleConstants.tile_index(pos.x, pos.y, _setup_input.grid_width)
 		if tile_index < 0 or tile_index >= _setup_tile_unit_count.size():
 			return false

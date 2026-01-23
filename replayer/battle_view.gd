@@ -13,6 +13,8 @@ const UNIT_SCALE = 0.42
 const PROJECTILE_SCALE = 0.2
 const OVERLAY_RED = Color(0.85, 0.2, 0.2, 0.18)
 const OVERLAY_BLUE = Color(0.2, 0.45, 0.9, 0.18)
+const DEPLOY_RED = Color(0.9, 0.25, 0.25, 0.1)
+const DEPLOY_BLUE = Color(0.25, 0.5, 0.95, 0.1)
 const GHOST_ALPHA = 0.35
 const GHOST_INVALID_ALPHA = 0.55
 
@@ -60,6 +62,9 @@ var _projectile_meshes = []
 var _ghost_meshes = []
 var _ghost_units = []
 var _ghost_valid: bool = true
+var _deploy_red_rect: Rect2i = Rect2i()
+var _deploy_blue_rect: Rect2i = Rect2i()
+var _show_deploy_zones: bool = false
 var _zoom: float = VIEW_SCALE
 var _tile_side = PackedInt32Array()
 var _hovered_tile = Vector2i(-1, -1)
@@ -116,6 +121,12 @@ func set_ghost_units(units: Array, valid: bool) -> void:
 	_ghost_valid = valid
 	_update_ghost_meshes()
 
+func set_deployment_zones(red_rect: Rect2i, blue_rect: Rect2i, visible: bool) -> void:
+	_deploy_red_rect = red_rect
+	_deploy_blue_rect = blue_rect
+	_show_deploy_zones = visible
+	queue_redraw()
+
 func _apply_zoom(target_zoom: float, mouse_pos: Vector2) -> void:
 	var clamped = clamp(target_zoom, MIN_ZOOM, MAX_ZOOM)
 	if is_equal_approx(clamped, _zoom):
@@ -139,6 +150,10 @@ func _draw() -> void:
 	var total_width = grid_width * TILE_SIZE
 	var total_height = grid_height * TILE_SIZE
 	draw_rect(Rect2(0, 0, total_width, total_height), Color(0.08, 0.09, 0.12))
+
+	if _show_deploy_zones:
+		_draw_deploy_zone(_deploy_red_rect, DEPLOY_RED)
+		_draw_deploy_zone(_deploy_blue_rect, DEPLOY_BLUE)
 
 	if _tile_side.size() == grid_width * grid_height:
 		for y in range(grid_height):
@@ -164,6 +179,19 @@ func _draw() -> void:
 			false,
 			2.0
 		)
+
+func _draw_deploy_zone(zone: Rect2i, color: Color) -> void:
+	if zone.size.x <= 0 or zone.size.y <= 0:
+		return
+	draw_rect(
+		Rect2(
+			zone.position.x * TILE_SIZE,
+			zone.position.y * TILE_SIZE,
+			zone.size.x * TILE_SIZE,
+			zone.size.y * TILE_SIZE
+		),
+		color
+	)
 
 func render(replayer) -> void:
 	if replayer == null:

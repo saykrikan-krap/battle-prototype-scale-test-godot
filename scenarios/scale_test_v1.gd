@@ -7,7 +7,7 @@ const BattleInput = preload("res://schema/battle_input.gd")
 const GRID_WIDTH = 80
 const GRID_HEIGHT = 40
 const DEPLOY_WIDTH = 15
-const DEPLOY_HEIGHT = 28
+const DEPLOY_HEIGHT = 32
 const RED_ZONE_START = 0
 const BLUE_ZONE_START = GRID_WIDTH - DEPLOY_WIDTH
 
