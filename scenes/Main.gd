@@ -10,6 +10,9 @@ const EventLog = preload("res://schema/event_log.gd")
 
 const DEFAULT_TPS = 20
 const CUSTOM_FLAG = "--custom-setup"
+const MAP_CLEAR_FLAG = "--map-clear"
+const MAP_TREES_FLAG = "--map-trees"
+const MAP_RIVER_FLAG = "--map-river"
 const CUSTOM_SQUAD_SIZE_DEFAULT = 50
 const CUSTOM_SQUAD_SIZE_INFANTRY = 64
 const CUSTOM_SQUAD_SIZE_CAVALRY = 48
@@ -36,9 +39,11 @@ var _next_unit_id: int = 0
 var _next_squad_id: int = 0
 var _setup_tile_unit_count = PackedInt32Array()
 var _show_squad_debug: bool = false
+var _map_id: int = ScaleTestV1.MAP_TREES
 
 func _ready() -> void:
 	var args = OS.get_cmdline_args()
+	_map_id = _map_id_from_args(args)
 	if "--resolve-only" in args:
 		_run_headless_resolve()
 		return
@@ -62,7 +67,7 @@ func _ready() -> void:
 	if _custom_mode:
 		_enter_custom_setup()
 	else:
-		var input = ScaleTestV1.build()
+		var input = ScaleTestV1.build(ScaleTestV1.DEFAULT_SEED, _map_id)
 		_show_preview(input)
 		_battle_ui.set_custom_setup_enabled(false)
 		if _battle_view != null:
@@ -110,7 +115,7 @@ func _start_resolve() -> void:
 	_resolver_thread.start(Callable(self, "_resolve_task"))
 
 func _resolve_task() -> Dictionary:
-	var input = ScaleTestV1.build()
+	var input = ScaleTestV1.build(ScaleTestV1.DEFAULT_SEED, _map_id)
 	if _custom_mode and _setup_input != null:
 		input = _setup_input
 	return BattleResolver.resolve(input)
@@ -183,7 +188,7 @@ func _enter_custom_setup() -> void:
 	_placing_unit_type = -1
 	if _battle_view != null:
 		_battle_view.set_ghost_units([], true)
-	_setup_input = ScaleTestV1.build_empty()
+	_setup_input = ScaleTestV1.build_empty(ScaleTestV1.DEFAULT_SEED, _map_id)
 	_next_unit_id = 0
 	_next_squad_id = 0
 	_rebuild_setup_occupancy()
@@ -247,7 +252,7 @@ func _winner_name(winner: int) -> String:
 	return "Draw"
 
 func _run_headless_resolve() -> void:
-	var input = ScaleTestV1.build()
+	var input = ScaleTestV1.build(ScaleTestV1.DEFAULT_SEED, _map_id)
 	var args = OS.get_cmdline_args()
 	var profile = "--profile-resolve" in args
 	var result = BattleResolver.resolve(input, profile)
@@ -544,9 +549,21 @@ func _is_layout_valid(tiles: Array, zone: Rect2i) -> bool:
 		var tile_index = BattleConstants.tile_index(pos.x, pos.y, _setup_input.grid_width)
 		if tile_index < 0 or tile_index >= _setup_tile_unit_count.size():
 			return false
+		if tile_index < _setup_input.tile_terrain.size():
+			if _setup_input.tile_terrain[tile_index] == BattleConstants.TerrainType.WATER:
+				return false
 		if _setup_tile_unit_count[tile_index] > 0:
 			return false
 	return true
+
+func _map_id_from_args(args: PackedStringArray) -> int:
+	if MAP_CLEAR_FLAG in args:
+		return ScaleTestV1.MAP_CLEAR
+	if MAP_RIVER_FLAG in args:
+		return ScaleTestV1.MAP_RIVER
+	if MAP_TREES_FLAG in args:
+		return ScaleTestV1.MAP_TREES
+	return ScaleTestV1.MAP_TREES
 
 func _build_ghost_units(layout: Dictionary, tiles: Array, unit_type: int, side: int) -> Array:
 	var ghost_units = []

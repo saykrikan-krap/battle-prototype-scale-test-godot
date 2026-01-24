@@ -99,9 +99,11 @@ Optional (but helpful):
 - Prototype v1 terrain types:
   - Grassland = 0
   - Trees = 1
+  - Water = 2
 - Prototype v1 terrain costs:
   - Grassland: 1
   - Trees: 2
+  - Water: impassable
 
 ### 3.4 Occupancy index
 
@@ -147,7 +149,7 @@ Provide a function:
 Rules:
 - If `tile_to` is impassable for this (profile,size), it is not expanded.
 - Cost must be **integer** for determinism and easy slack tuning.
-- Prototype v1: `step_cost = TERRAIN_COST[terrain_type[tile_to]]` (grass=1, trees=2).
+- Prototype v1: `step_cost = TERRAIN_COST[terrain_type[tile_to]]` (grass=1, trees=2), and water tiles are not expanded.
 
 Important: **Do not include friendly occupancy in this step cost.**
 

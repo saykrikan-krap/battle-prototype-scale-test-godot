@@ -21,9 +21,12 @@ const MAX_TOTAL_SIZE_PER_TILE = 10
 const TIME_LIMIT_TICKS = 5000
 
 const DEFAULT_SEED = 12345
+const MAP_CLEAR = 0
+const MAP_TREES = 1
+const MAP_RIVER = 2
 
-static func build(seed: int = DEFAULT_SEED):
-	var input = _build_base_input(seed)
+static func build(seed: int = DEFAULT_SEED, map_id: int = MAP_TREES):
+	var input = _build_base_input(seed, map_id)
 
 	var next_unit_id = 0
 	var next_squad_id = 0
@@ -33,10 +36,10 @@ static func build(seed: int = DEFAULT_SEED):
 	result = _populate_side(input, BattleConstants.Side.BLUE, BLUE_ZONE_START, next_unit_id, next_squad_id)
 	return input
 
-static func build_empty(seed: int = DEFAULT_SEED):
-	return _build_base_input(seed)
+static func build_empty(seed: int = DEFAULT_SEED, map_id: int = MAP_TREES):
+	return _build_base_input(seed, map_id)
 
-static func _build_base_input(seed: int) -> BattleInput:
+static func _build_base_input(seed: int, map_id: int) -> BattleInput:
 	var input = BattleInput.new()
 	input.grid_width = GRID_WIDTH
 	input.grid_height = GRID_HEIGHT
@@ -44,19 +47,46 @@ static func _build_base_input(seed: int) -> BattleInput:
 	input.max_total_size_per_tile = MAX_TOTAL_SIZE_PER_TILE
 	input.seed = seed
 	input.time_limit_ticks = TIME_LIMIT_TICKS
-	input.tile_terrain = _build_terrain(GRID_WIDTH, GRID_HEIGHT)
+	input.tile_terrain = _build_terrain(GRID_WIDTH, GRID_HEIGHT, map_id)
 	return input
 
-static func _build_terrain(width: int, height: int) -> PackedInt32Array:
+static func _build_terrain(width: int, height: int, map_id: int) -> PackedInt32Array:
+	match map_id:
+		MAP_CLEAR:
+			return _build_terrain_clear(width, height)
+		MAP_RIVER:
+			return _build_terrain_river(width, height)
+		_:
+			return _build_terrain_trees(width, height)
+
+static func _build_terrain_clear(width: int, height: int) -> PackedInt32Array:
 	var terrain = PackedInt32Array()
 	terrain.resize(width * height)
 	for i in range(terrain.size()):
 		terrain[i] = BattleConstants.TerrainType.GRASS
+	return terrain
 
+static func _build_terrain_trees(width: int, height: int) -> PackedInt32Array:
+	var terrain = _build_terrain_clear(width, height)
 	_add_tree_patch(terrain, width, height, Rect2i(18, 6, 10, 6))
 	_add_tree_patch(terrain, width, height, Rect2i(34, 16, 12, 7))
 	_add_tree_patch(terrain, width, height, Rect2i(50, 24, 12, 7))
+	return terrain
 
+static func _build_terrain_river(width: int, height: int) -> PackedInt32Array:
+	var terrain = _build_terrain_clear(width, height)
+	var river_width = 3
+	var river_start = int(width / 2) - 1
+	var gap_height = 3
+	var gap_start = int(height / 2) - 1
+	for y in range(height):
+		var in_gap = y >= gap_start and y < gap_start + gap_height
+		if in_gap:
+			continue
+		for x in range(river_start, river_start + river_width):
+			if x < 0 or x >= width:
+				continue
+			terrain[x + y * width] = BattleConstants.TerrainType.WATER
 	return terrain
 
 static func _add_tree_patch(terrain: PackedInt32Array, width: int, height: int, rect: Rect2i) -> void:

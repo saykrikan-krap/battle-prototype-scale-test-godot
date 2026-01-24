@@ -115,6 +115,7 @@ Required implementation shape:
 - Terrain types:
   - Grassland: cost **1**
   - Trees: cost **2**
+  - Water: **impassable**
 - Movement delay = base move cost × terrain cost.
 - Cavalry (including Heavy Cavalry) use the Infantry base move cost on trees (no speed advantage).
 

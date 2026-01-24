@@ -662,6 +662,7 @@ static func resolve(input, profile: bool = false) -> Dictionary:
 					tile_side,
 					tile_unit_count,
 					tile_total_size,
+					tile_terrain,
 					input.max_units_per_tile,
 					input.max_total_size_per_tile,
 					width,
@@ -697,7 +698,7 @@ static func resolve(input, profile: bool = false) -> Dictionary:
 				var target = intent_tile[id]
 				if target == -1:
 					continue
-				if _tile_can_accept(target, side[id], unit_size[id], tile_side, tile_unit_count, tile_total_size, input.max_units_per_tile, input.max_total_size_per_tile):
+				if _tile_can_accept(target, side[id], unit_size[id], tile_side, tile_unit_count, tile_total_size, tile_terrain, input.max_units_per_tile, input.max_total_size_per_tile):
 					var from_tile = origin_tile[id]
 					var from_pos = BattleConstants.encode_pos(from_tile % width, int(from_tile / width))
 					_remove_unit_from_tile(from_tile, id, unit_size[id], tile_side, tile_unit_count, tile_total_size, tile_units)
@@ -875,6 +876,9 @@ static func _terrain_step_cost(terrain_type: int) -> int:
 		return BASE_STEP_COST
 	return BattleConstants.TERRAIN_COST[terrain_type]
 
+static func _terrain_passable(terrain_type: int) -> bool:
+	return terrain_type != BattleConstants.TerrainType.WATER
+
 static func _move_delay(unit_type: int, terrain_type: int) -> int:
 	var base = BattleConstants.MOVE_COST[unit_type]
 	if terrain_type == BattleConstants.TerrainType.TREES and _is_cavalry_unit(unit_type):
@@ -989,9 +993,13 @@ static func _tile_can_accept(
 		tile_side: PackedInt32Array,
 		tile_unit_count: PackedInt32Array,
 		tile_total_size: PackedInt32Array,
+		tile_terrain: PackedInt32Array,
 		max_units: int,
 		max_total_size: int
 	) -> bool:
+	if tile >= 0 and tile < tile_terrain.size():
+		if not _terrain_passable(tile_terrain[tile]):
+			return false
 	var side_value = tile_side[tile]
 	if side_value == -1 or side_value == unit_side:
 		if tile_unit_count[tile] + 1 <= max_units and tile_total_size[tile] + unit_size <= max_total_size:
@@ -1006,6 +1014,7 @@ static func _choose_move_with_formation(
 		tile_side: PackedInt32Array,
 		tile_unit_count: PackedInt32Array,
 		tile_total_size: PackedInt32Array,
+		tile_terrain: PackedInt32Array,
 		max_units: int,
 		max_total_size: int,
 		width: int,
@@ -1035,7 +1044,7 @@ static func _choose_move_with_formation(
 			order += 1
 			continue
 		var tile = nx + ny * width
-		if not _tile_can_accept(tile, unit_side, unit_size, tile_side, tile_unit_count, tile_total_size, max_units, max_total_size):
+		if not _tile_can_accept(tile, unit_side, unit_size, tile_side, tile_unit_count, tile_total_size, tile_terrain, max_units, max_total_size):
 			order += 1
 			continue
 		var dist = dist_field[tile]
@@ -1222,7 +1231,7 @@ static func _build_distance_field(
 		dist.resize(tile_count)
 	dist.fill(INF_DISTANCE)
 	if use_uniform_cost:
-		_build_distance_field_bfs(dist, width, height, unit_side, tile_side, neighbors)
+		_build_distance_field_bfs(dist, width, height, unit_side, tile_side, tile_terrain, neighbors)
 	else:
 		_build_distance_field_dijkstra(dist, width, height, unit_side, tile_side, tile_terrain, neighbors)
 
@@ -1232,6 +1241,7 @@ static func _build_distance_field_bfs(
 		height: int,
 		unit_side: int,
 		tile_side: PackedInt32Array,
+		tile_terrain: PackedInt32Array,
 		neighbors: Array
 	) -> void:
 	var tile_count = width * height
@@ -1241,6 +1251,8 @@ static func _build_distance_field_bfs(
 	var tail = 0
 	for tile in range(tile_count):
 		if tile_side[tile] != -1 and tile_side[tile] != unit_side:
+			if not _terrain_passable(tile_terrain[tile]):
+				continue
 			dist[tile] = 0
 			queue[tail] = tile
 			tail += 1
@@ -1251,6 +1263,8 @@ static func _build_distance_field_bfs(
 		var base_dist = dist[tile]
 		var next_dist = base_dist + BASE_STEP_COST
 		for neighbor in neighbors[tile]:
+			if not _terrain_passable(tile_terrain[neighbor]):
+				continue
 			if next_dist < dist[neighbor]:
 				dist[neighbor] = next_dist
 				queue[tail] = neighbor
@@ -1270,6 +1284,8 @@ static func _build_distance_field_dijkstra(
 	var heap_dists = PackedInt32Array()
 	for tile in range(tile_count):
 		if tile_side[tile] != -1 and tile_side[tile] != unit_side:
+			if not _terrain_passable(tile_terrain[tile]):
+				continue
 			dist[tile] = 0
 			_heap_push(heap_nodes, heap_dists, tile, 0)
 
@@ -1280,6 +1296,8 @@ static func _build_distance_field_dijkstra(
 		if base_dist != dist[tile]:
 			continue
 		for neighbor in neighbors[tile]:
+			if not _terrain_passable(tile_terrain[neighbor]):
+				continue
 			var step_cost = _terrain_step_cost(tile_terrain[neighbor])
 			var next_dist = base_dist + step_cost
 			if next_dist < dist[neighbor]:
