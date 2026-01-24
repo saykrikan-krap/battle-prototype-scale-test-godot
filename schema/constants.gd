@@ -31,6 +31,7 @@ enum UnitType {
 enum TerrainType {
 	GRASS = 0,
 	TREES = 1,
+	WATER = 2,
 }
 
 enum EventType {
@@ -65,7 +66,7 @@ static var PROJECTILE_SPEED = PackedInt32Array([2, 3])
 static var DEFAULT_FACING = PackedInt32Array([Facing.RIGHT, Facing.LEFT])
 
 const MAX_SQUAD_SIZE = 50
-static var TERRAIN_COST = PackedInt32Array([1, 2])
+static var TERRAIN_COST = PackedInt32Array([1, 2, 1])
 
 const NEIGHBOR_DIRS = [
 	Vector2i(0, -1),

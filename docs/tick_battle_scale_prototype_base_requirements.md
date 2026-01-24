@@ -142,6 +142,7 @@ Move is 1 tile per action. Minimum cost is always ≥ 1 tick.
 Terrain applies a movement multiplier to the base move cost:
 - Grassland: **1×**
 - Trees: **2×**
+- Water: **impassable** (cannot enter)
 
 Special case:
 - Cavalry (including Heavy Cavalry) **lose their speed advantage in trees** and use the Infantry base move cost before applying the 2× multiplier.

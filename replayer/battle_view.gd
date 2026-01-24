@@ -17,6 +17,8 @@ const DEPLOY_RED = Color(0.9, 0.25, 0.25, 0.1)
 const DEPLOY_BLUE = Color(0.25, 0.5, 0.95, 0.1)
 const TERRAIN_TREES_FILL = Color(0.1, 0.2, 0.12, 0.5)
 const TERRAIN_TREES_MARK = Color(0.2, 0.5, 0.25, 0.9)
+const TERRAIN_WATER_FILL = Color(0.08, 0.18, 0.35, 0.55)
+const TERRAIN_WATER_MARK = Color(0.3, 0.6, 0.9, 0.8)
 const GHOST_ALPHA = 0.35
 const GHOST_INVALID_ALPHA = 0.55
 const DEBUG_ANCHOR_COLOR = Color(0.98, 0.9, 0.3, 0.9)
@@ -198,7 +200,10 @@ func _draw() -> void:
 		for y in range(grid_height):
 			for x in range(grid_width):
 				var tile = x + y * grid_width
-				if _tile_terrain[tile] == BattleConstants.TerrainType.TREES:
+				var terrain = _tile_terrain[tile]
+				if terrain == BattleConstants.TerrainType.WATER:
+					draw_rect(Rect2(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE), TERRAIN_WATER_FILL)
+				elif terrain == BattleConstants.TerrainType.TREES:
 					draw_rect(Rect2(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE), TERRAIN_TREES_FILL)
 
 	if _show_deploy_zones:
@@ -220,8 +225,13 @@ func _draw() -> void:
 		for y in range(grid_height):
 			for x in range(grid_width):
 				var tile = x + y * grid_width
-				if _tile_terrain[tile] == BattleConstants.TerrainType.TREES:
+				var terrain = _tile_terrain[tile]
+				if terrain == BattleConstants.TerrainType.TREES:
 					draw_circle(_tile_center(x, y), marker_radius, TERRAIN_TREES_MARK)
+				elif terrain == BattleConstants.TerrainType.WATER:
+					var center = _tile_center(x, y)
+					var half = TILE_SIZE * 0.32
+					draw_line(center + Vector2(-half, 0), center + Vector2(half, 0), TERRAIN_WATER_MARK, 2.0)
 
 	var line_color = Color(0.18, 0.2, 0.25)
 	for x in range(grid_width + 1):
