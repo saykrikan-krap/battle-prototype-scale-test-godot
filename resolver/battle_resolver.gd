@@ -42,6 +42,13 @@ static func resolve(input, profile: bool = false) -> Dictionary:
 	var tile_count = width * height
 	var unit_count = input.unit_count()
 
+	var tile_terrain = input.tile_terrain.duplicate()
+	if tile_terrain.size() != tile_count:
+		tile_terrain.resize(tile_count)
+		for i in range(tile_count):
+			tile_terrain[i] = BattleConstants.TerrainType.GRASS
+	var uniform_cost = USE_UNIFORM_COST_BFS and _terrain_uniform_cost(tile_terrain)
+
 	event_log.add_event(
 		0,
 		0,
@@ -51,6 +58,16 @@ static func resolve(input, profile: bool = false) -> Dictionary:
 		input.time_limit_ticks,
 		unit_count
 	)
+	for tile in range(tile_count):
+		event_log.add_event(
+			0,
+			0,
+			BattleConstants.EventType.TERRAIN_SET,
+			tile,
+			tile_terrain[tile],
+			0,
+			0
+		)
 
 	var alive = PackedInt32Array()
 	alive.resize(unit_count)
@@ -378,10 +395,11 @@ static func resolve(input, profile: bool = false) -> Dictionary:
 					width,
 					height,
 					tile_side,
+					tile_terrain,
 					neighbors,
 					terrain_version,
 					occupancy_version,
-					USE_UNIFORM_COST_BFS
+					uniform_cost
 				)
 		if profile_enabled:
 			time_field_build_usec += Time.get_ticks_usec() - segment_start
@@ -708,7 +726,11 @@ static func resolve(input, profile: bool = false) -> Dictionary:
 				if active_move[id] == 0:
 					continue
 				if moved_flag[id] == 1:
-					next_tick[id] = tick + BattleConstants.MOVE_COST[unit_type[id]]
+					var moved_tile = unit_x[id] + unit_y[id] * width
+					var terrain_type = BattleConstants.TerrainType.GRASS
+					if moved_tile >= 0 and moved_tile < tile_terrain.size():
+						terrain_type = tile_terrain[moved_tile]
+					next_tick[id] = tick + _move_delay(unit_type[id], terrain_type)
 				else:
 					next_tick[id] = tick + BattleConstants.WAIT_COST[unit_type[id]]
 
@@ -848,6 +870,23 @@ static func _max_unit_size(unit_size: PackedInt32Array) -> int:
 			max_size = value
 	return max_size
 
+static func _terrain_step_cost(terrain_type: int) -> int:
+	if terrain_type < 0 or terrain_type >= BattleConstants.TERRAIN_COST.size():
+		return BASE_STEP_COST
+	return BattleConstants.TERRAIN_COST[terrain_type]
+
+static func _move_delay(unit_type: int, terrain_type: int) -> int:
+	var base = BattleConstants.MOVE_COST[unit_type]
+	if terrain_type == BattleConstants.TerrainType.TREES and _is_cavalry_unit(unit_type):
+		base = BattleConstants.MOVE_COST[BattleConstants.UnitType.INFANTRY]
+	return base * _terrain_step_cost(terrain_type)
+
+static func _terrain_uniform_cost(tile_terrain: PackedInt32Array) -> bool:
+	for terrain_type in tile_terrain:
+		if terrain_type != BattleConstants.TerrainType.GRASS:
+			return false
+	return true
+
 static func _build_neighbors(width: int, height: int) -> Array:
 	var neighbors = []
 	neighbors.resize(width * height)
@@ -900,6 +939,10 @@ static func _is_melee_unit(u_type: int) -> bool:
 		or u_type == BattleConstants.UnitType.HEAVY_INFANTRY \
 		or u_type == BattleConstants.UnitType.ELITE_INFANTRY \
 		or u_type == BattleConstants.UnitType.CAVALRY \
+		or u_type == BattleConstants.UnitType.HEAVY_CAVALRY
+
+static func _is_cavalry_unit(u_type: int) -> bool:
+	return u_type == BattleConstants.UnitType.CAVALRY \
 		or u_type == BattleConstants.UnitType.HEAVY_CAVALRY
 
 static func _is_archer(u_type: int) -> bool:
@@ -1123,6 +1166,7 @@ static func _ensure_distance_field(
 		width: int,
 		height: int,
 		tile_side: PackedInt32Array,
+		tile_terrain: PackedInt32Array,
 		neighbors: Array,
 		terrain_version: int,
 		occupancy_version: PackedInt32Array,
@@ -1151,7 +1195,7 @@ static func _ensure_distance_field(
 		return
 
 	var start_usec = Time.get_ticks_usec()
-	_build_distance_field(cache.dist, width, height, unit_side, unit_size, tile_side, neighbors, use_uniform_cost)
+	_build_distance_field(cache.dist, width, height, unit_side, unit_size, tile_side, tile_terrain, neighbors, use_uniform_cost)
 	var elapsed = Time.get_ticks_usec() - start_usec
 
 	cache.initialized = true
@@ -1169,6 +1213,7 @@ static func _build_distance_field(
 		unit_side: int,
 		unit_size: int,
 		tile_side: PackedInt32Array,
+		tile_terrain: PackedInt32Array,
 		neighbors: Array,
 		use_uniform_cost: bool
 	) -> void:
@@ -1179,7 +1224,7 @@ static func _build_distance_field(
 	if use_uniform_cost:
 		_build_distance_field_bfs(dist, width, height, unit_side, tile_side, neighbors)
 	else:
-		_build_distance_field_dijkstra(dist, width, height, unit_side, tile_side, neighbors)
+		_build_distance_field_dijkstra(dist, width, height, unit_side, tile_side, tile_terrain, neighbors)
 
 static func _build_distance_field_bfs(
 		dist: PackedInt32Array,
@@ -1217,6 +1262,7 @@ static func _build_distance_field_dijkstra(
 		height: int,
 		unit_side: int,
 		tile_side: PackedInt32Array,
+		tile_terrain: PackedInt32Array,
 		neighbors: Array
 	) -> void:
 	var tile_count = width * height
@@ -1234,7 +1280,8 @@ static func _build_distance_field_dijkstra(
 		if base_dist != dist[tile]:
 			continue
 		for neighbor in neighbors[tile]:
-			var next_dist = base_dist + BASE_STEP_COST
+			var step_cost = _terrain_step_cost(tile_terrain[neighbor])
+			var next_dist = base_dist + step_cost
 			if next_dist < dist[neighbor]:
 				dist[neighbor] = next_dist
 				_heap_push(heap_nodes, heap_dists, neighbor, next_dist)
